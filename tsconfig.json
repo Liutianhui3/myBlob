@@ -1,0 +1,47 @@
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "strict": true,
+    "jsx": "preserve",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "lib": ["ESNext", "DOM"],
+    "skipLibCheck": true,
+    "noEmit": true,
+    "noImplicitAny": false,
+    "noImplicitThis": false,
+    "baseUrl": ".",
+    "allowJs": true, // 允许js文件
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "types": ["vite-plugin-svg-icons/client", "node"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/**/*.tsx",
+    "src/**/*.vue",
+    "src/**/**/*.ts",
+    "src/**/**/*.d.ts",
+    "src/**/**/*.tsx",
+    "src/**/**/*.vue",
+    "src/**/**/**/*.vue",
+    "src/**/**/**/*",
+    "src/**/**/**/*.ts",
+    "components.d.ts",
+    "auto-imports.d.ts",
+    "src/**/*.js",
+    "src/**/*.jsx",
+    "commitlint.config.js"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ]
+}
