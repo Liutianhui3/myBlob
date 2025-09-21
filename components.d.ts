@@ -7,15 +7,18 @@ export {}
 
 declare module 'vue' {
   export interface GlobalComponents {
+    123: (typeof import('./src/components/BlurReveal.vue'))['default']
+    BlurReveal: typeof import('./src/components/BlurReveal.vue')['default']
     Dock: typeof import('./src/components/Dock/Dock.vue')['default']
     DockIcon: typeof import('./src/components/Dock/DockIcon.vue')['default']
     DockSeparator: typeof import('./src/components/Dock/DockSeparator.vue')['default']
-    HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
+    HelloWorld: (typeof import('./src/components/HelloWorld.vue'))['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
-    SilkBackground: typeof import('./src/components/SnowfallBg.vue')['default']
+    SilkBackground: (typeof import('./src/components/SnowfallBg.vue'))['default']
     SnowfallBg: typeof import('./src/components/SnowfallBg.vue')['default']
-    StarsBackground: typeof import('./src/components/SnowfallBg.vue')['default']
+    SparklesText: typeof import('./src/components/SparklesText.vue')['default']
+    StarsBackground: (typeof import('./src/components/SnowfallBg.vue'))['default']
     Tippy: typeof import('./src/components/Tippy.vue')['default']
   }
 }

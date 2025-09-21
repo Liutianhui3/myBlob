@@ -7,14 +7,14 @@ export const constantRoutes: any = [
     redirect: '/home'
   },
   {
-    path: '/home',
+    path: '/basicLayout',
     component: BasicLayout,
-    meta: { title: 'Home' },
-    children:[
-      {  
-         path: '/demo',
-          component: Home,
-  }
+    meta: { title: '首页' },
+    children: [
+      {
+        path: '/home',
+        component: Home
+      }
     ]
   }
 ]

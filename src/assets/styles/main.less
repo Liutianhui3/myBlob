@@ -1,1 +1,72 @@
+/* 设置滚动条样式 */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
 
+::-webkit-scrollbar-track {
+  border-radius: 5px;
+  background-color: #ffffff;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 5px;
+  background-color: #d9d9d9;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-width: 1440px;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+ul {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+input {
+  background: #ffffff;
+  outline: none;
+  border: none;
+}
+
+#app {
+  height: 100%;
+}
+body,
+#app {
+  font-family:
+    'HarmonyOS_Sans_SC_Regular', 'Microsoft YaHei', 'PingFang SC', 'Helvetica Neue', Helvetica,
+    Arial, sans-serif !important;
+  font-weight: 400;
+  font-size: 14px;
+}
+* {
+  font-family:
+    'HarmonyOS_Sans_SC_Regular', 'Microsoft YaHei', 'PingFang SC', 'Helvetica Neue', Helvetica,
+    Arial, sans-serif !important;
+}
+
+/* 设置进度条的颜色 */
+#nprogress .bar {
+  background: var(--progress) !important;
+}
+
+/* 设置进度条尾部光晕的颜色 */
+#nprogress .peg {
+  box-shadow: 0 0 10px var(--progress) 0 0 5px var(--progress) !important;
+}
+
+/* 设置加载图标的颜色 */
+#nprogress .spinner-icon {
+  border-top-color: var(--progress) !important;
+  border-left-color: var(--progress) !important;
+}

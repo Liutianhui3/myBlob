@@ -25,6 +25,7 @@
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
+  --progress:#514DEF
 }
 
 .dark {
@@ -47,6 +48,7 @@
   --border: oklch(0.274 0.006 286.033);
   --input: oklch(0.274 0.006 286.033);
   --ring: oklch(0.442 0.017 285.786);
+   --progress:#FCD34D
 }
 
 @theme inline {
