@@ -8,7 +8,15 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     123: (typeof import('./src/components/BlurReveal.vue'))['default']
+    AnimatedTestimonials: typeof import('./src/components/AnimatedTestimonials.vue')['default']
+    AnimatePresence: typeof import('motion-v')['AnimatePresence']
+    BentoGrid: typeof import('./src/components/BentoGrid/BentoGrid.vue')['default']
+    BentoGridCard: typeof import('./src/components/BentoGrid/BentoGridCard.vue')['default']
+    BentoGridItem: typeof import('./src/components/BentoGrid/BentoGridItem.vue')['default']
     BlurReveal: typeof import('./src/components/BlurReveal.vue')['default']
+    ContainerScroll: typeof import('./src/components/ContainerScroll/ContainerScroll.vue')['default']
+    ContainerScrollCard: typeof import('./src/components/ContainerScroll/ContainerScrollCard.vue')['default']
+    ContainerScrollTitle: typeof import('./src/components/ContainerScroll/ContainerScrollTitle.vue')['default']
     Dock: typeof import('./src/components/Dock/Dock.vue')['default']
     DockIcon: typeof import('./src/components/Dock/DockIcon.vue')['default']
     DockSeparator: typeof import('./src/components/Dock/DockSeparator.vue')['default']

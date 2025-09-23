@@ -1,6 +1,6 @@
 import { constantRoutes } from './constants'
 import NProgress from 'nprogress' // progress bar
-const whitePaths = ['/home']
+const whitePaths = ['/home', '/article']
 
 export const createRouterGuard = function (router: any) {
   // 路由守卫

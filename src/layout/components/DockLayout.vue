@@ -1,9 +1,9 @@
 <template>
   <Dock class="mb-6 menu-dock bg-background" :magnification="14" ref="dockRef">
-    <DockIcon class="flex justify-center" style="margin: 0 4px">
+    <DockIcon class="flex justify-center" style="margin: 0 4px" @click="jumpRoute('/home')">
       <Icon :icon="homeIcon" class="size-6" />
     </DockIcon>
-    <DockIcon class="flex justify-center" style="margin: 0 4px">
+    <DockIcon class="flex justify-center" style="margin: 0 4px" @click="jumpRoute('/article')">
       <Icon :icon="menuIcon" class="size-6" />
     </DockIcon>
 
@@ -36,6 +36,8 @@
 
   const store = useGlobalStore()
   const theme = computed(() => store.theme)
+  const route = useRoute()
+  const router = useRouter()
 
   const dockRef = ref()
 
@@ -57,6 +59,14 @@
       store.setTheme('dark')
     } else {
       store.setTheme('light')
+    }
+  }
+
+  const jumpRoute = path => {
+    if (route.path != path) {
+      router.push({
+        path: path
+      })
     }
   }
 </script>

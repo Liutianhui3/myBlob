@@ -8,6 +8,8 @@
     <WorkExperience />
     <!-- 技术栈 -->
     <Skills />
+    <!-- 项目经历 -->
+    <Projects />
     <!-- 交流 -->
     <Concat />
   </div>
@@ -17,6 +19,7 @@
   import About from '../components/About.vue'
   import WorkExperience from '../components/WorkExperience.vue'
   import Skills from '../components/Skills.vue'
+  import Projects from '../components/Projects.vue'
   import Concat from '../components/Concat.vue'
 </script>
 <style scoped>

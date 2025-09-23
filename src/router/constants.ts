@@ -1,5 +1,6 @@
 import BasicLayout from '@/layout/index.vue'
 import Home from '@/views/home/index.vue'
+import Article from '@/views/article/index.vue'
 
 export const constantRoutes: any = [
   {
@@ -9,11 +10,17 @@ export const constantRoutes: any = [
   {
     path: '/basicLayout',
     component: BasicLayout,
-    meta: { title: '首页' },
+
     children: [
       {
         path: '/home',
-        component: Home
+        component: Home,
+        meta: { title: '首页' }
+      },
+      {
+        path: '/article',
+        component: Article,
+        meta: { title: '文章' }
       }
     ]
   }
