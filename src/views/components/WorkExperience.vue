@@ -103,6 +103,7 @@
 <script setup>
   import BlurReveal from '@/components/BlurReveal.vue'
   import systexImg from '@/assets/images/systex.jpg'
+  import rankingImg from '@/assets/images/ranking.svg'
   import { Motion } from 'motion-v'
 
   const BLUR_FADE_DELAY = 0.04
@@ -147,7 +148,7 @@
     },
     {
       id: 2,
-      img: 'https://www.shanghairanking.com/_nuxt/img/logo.902480b.svg',
+      img: rankingImg,
       alt: 'ranking',
       name: 'Shanghai Ranking',
       job: '前端开发工程师',

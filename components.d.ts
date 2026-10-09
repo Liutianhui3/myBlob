@@ -7,7 +7,6 @@ export {}
 
 declare module 'vue' {
   export interface GlobalComponents {
-    123: (typeof import('./src/components/BlurReveal.vue'))['default']
     AnimatedTestimonials: typeof import('./src/components/AnimatedTestimonials.vue')['default']
     AnimatePresence: typeof import('motion-v')['AnimatePresence']
     BentoGrid: typeof import('./src/components/BentoGrid/BentoGrid.vue')['default']
@@ -20,13 +19,10 @@ declare module 'vue' {
     Dock: typeof import('./src/components/Dock/Dock.vue')['default']
     DockIcon: typeof import('./src/components/Dock/DockIcon.vue')['default']
     DockSeparator: typeof import('./src/components/Dock/DockSeparator.vue')['default']
-    HelloWorld: (typeof import('./src/components/HelloWorld.vue'))['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
-    SilkBackground: (typeof import('./src/components/SnowfallBg.vue'))['default']
     SnowfallBg: typeof import('./src/components/SnowfallBg.vue')['default']
     SparklesText: typeof import('./src/components/SparklesText.vue')['default']
-    StarsBackground: (typeof import('./src/components/SnowfallBg.vue'))['default']
     Tippy: typeof import('./src/components/Tippy.vue')['default']
   }
 }

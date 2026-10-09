@@ -9,7 +9,7 @@
     <!-- 技术栈 -->
     <Skills />
     <!-- 项目经历 -->
-    <Projects />
+    <!-- <Projects /> -->
     <!-- 交流 -->
     <Concat />
   </div>
