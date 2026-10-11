@@ -1,19 +1,10 @@
 import { computed } from 'vue'
-import { authHeaders, clearSession, currentUser, setUserInfo, TOKEN_KEY } from './auth'
-import type { CurrentUser, WorkExperience } from './auth'
+import { clearSession, currentUser, setUserInfo, TOKEN_KEY } from './auth'
+import { updateUserProfile } from '../api/user'
+import type { CurrentUser, UserProfile } from '../api/types'
+import { RequestError } from '../utils/request'
 
-export interface UserProfile {
-  name: string
-  email: string
-  location: string
-  website: string
-  bio: string
-  avatar: string
-  phone: string
-  about: string
-  skills: string[]
-  workExperiences: WorkExperience[]
-}
+export type { UserProfile } from '../api/types'
 
 export class ProfileError extends Error {
   constructor(
@@ -72,30 +63,19 @@ export async function saveUserProfile(profile: UserProfile) {
       endDate: item.endDate,
       description: item.description.trim()
     }))
-  }
-  let response: Response
+  } as UserProfile
+  let data: CurrentUser
   try {
-    response = await fetch('/api/users/me', {
-      method: 'PATCH',
-      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(15000)
-    })
-  } catch {
+    data = await updateUserProfile(body)
+  } catch (error) {
+    if (error instanceof RequestError) {
+      if (error.status === 401) {
+        if (!sameSession()) throw new ProfileError('登录状态已变化，请重新打开个人资料页。')
+        clearSession()
+      }
+      throw new ProfileError(error.message, error.status)
+    }
     throw new ProfileError('暂时无法连接服务，请检查网络后重试。')
-  }
-  if (response.status === 401) {
-    if (!sameSession()) throw new ProfileError('登录状态已变化，请重新打开个人资料页。')
-    clearSession()
-    throw new ProfileError('登录已过期，请重新登录。', 401)
-  }
-  const data = await response.json().catch(() => null)
-  if (!response.ok) {
-    const message = Array.isArray(data?.message) ? data.message.join('，') : data?.message
-    throw new ProfileError(
-      typeof message === 'string' ? message : '保存失败，请稍后重试。',
-      response.status
-    )
   }
   if (!data || data.id !== userId) throw new ProfileError('服务返回的资料不正确，请刷新后重试。')
   // A late response must not replace another account or a newer login session.

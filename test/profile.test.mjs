@@ -1,8 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { loadClient, flushRequests } from './helpers/client.mjs'
 import fs from 'node:fs'
-import vm from 'node:vm'
-import ts from 'typescript'
 import * as vue from 'vue'
 import { parse, compileStyle } from '@vue/compiler-sfc'
 import postcss from 'postcss'
@@ -17,56 +16,31 @@ function client() {
     location: '上海',
     bio: '服务端资料'
   })
-  const calls = []
   const session = new Map()
-  let respond = async () => ({
-    ok: true,
-    status: 200,
-    json: async () => ({ ...currentUser.value, name: '新昵称', avatar: '' })
-  })
-  const context = {
-    exports: {},
-    AbortSignal,
-    require: name =>
-      name === 'vue'
-        ? vue
-        : {
-            currentUser,
-            setUserInfo: user => {
-              currentUser.value = user
-              session.set('userInfo', JSON.stringify(user))
-            },
-            TOKEN_KEY: 'myblob_token',
-            authHeaders: () => ({ Authorization: `Bearer ${storage.get('myblob_token')}` }),
-            clearSession: () => {
-              currentUser.value = null
-              storage.delete('myblob_token')
-              session.delete('userInfo')
-            }
-          },
-    localStorage: { getItem: key => storage.get(key) ?? null },
-    fetch: async (...args) => {
-      calls.push(args)
-      return respond()
-    }
-  }
-  const source = fs.readFileSync(new URL('../src/lib/profile.ts', import.meta.url), 'utf8')
-  vm.runInNewContext(
-    ts.transpileModule(source, {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-    }).outputText,
-    context
-  )
-  return {
-    api: context.exports,
-    currentUser,
-    calls,
+  const client = loadClient({
     storage,
     session,
-    respond: handler => {
-      respond = handler
+    response: async () => ({
+      status: 200,
+      json: async () => ({ ...currentUser.value, name: '新昵称', avatar: '' })
+    }),
+    modules: {
+      'src/lib/auth.ts': {
+        currentUser,
+        setUserInfo: user => {
+          currentUser.value = user
+          session.set('userInfo', JSON.stringify(user))
+        },
+        TOKEN_KEY: 'myblob_token',
+        clearSession: () => {
+          currentUser.value = null
+          storage.delete('myblob_token')
+          session.delete('userInfo')
+        }
+      }
     }
-  }
+  })
+  return { ...client, api: client.load('src/lib/profile.ts'), currentUser }
 }
 
 test('profile reads server data, PATCHes only editable fields and updates shared account state', async () => {
@@ -174,6 +148,7 @@ test('late successful or unauthorized responses never replace or sign out anothe
       email: 'second@example.com'
     }
     storage.set('myblob_token', 'new-token')
+    await flushRequests()
     complete({
       ok: status === 200,
       status,

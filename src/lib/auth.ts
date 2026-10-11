@@ -1,31 +1,12 @@
 import { computed, ref } from 'vue'
+import { logout } from '../api/auth'
+import { getCurrentUser } from '../api/user'
+import type { CurrentUser, WorkExperience } from '../api/types'
+import { RequestError } from '../utils/request'
+import { TOKEN_KEY, getToken } from '../utils/token'
 
-export interface WorkExperience {
-  id: string
-  company: string
-  position: string
-  startDate: string
-  endDate: string
-  description: string
-}
-
-export interface CurrentUser {
-  id: string
-  username: string | null
-  name: string
-  email: string
-  location?: string
-  website?: string
-  bio?: string
-  avatar?: string
-  phone?: string
-  about?: string
-  skills?: string[]
-  workExperiences?: WorkExperience[]
-  createdAt?: string
-  updatedAt?: string
-}
-export const TOKEN_KEY = 'myblob_token'
+export type { CurrentUser, WorkExperience } from '../api/types'
+export { TOKEN_KEY } from '../utils/token'
 export const USER_INFO_KEY = 'userInfo'
 
 function publicUserInfo(value: unknown): CurrentUser | null {
@@ -110,11 +91,6 @@ export function setUserInfo(user: CurrentUser | null) {
   }
 }
 
-export function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem(TOKEN_KEY)
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
 export function saveSession(token: string, user: CurrentUser) {
   localStorage.setItem(TOKEN_KEY, token)
   setUserInfo(user)
@@ -133,32 +109,24 @@ export async function checkSession() {
     return null
   }
   try {
-    const response = await fetch('/api/users/me', {
-      headers: authHeaders(),
-      signal: AbortSignal.timeout(10000)
-    })
-    const user = response.ok ? await response.json() : null
+    const user = await getCurrentUser()
     if (localStorage.getItem(TOKEN_KEY) !== token) return null
-    if (response.status === 401) clearSession()
-    else setUserInfo(user)
-  } catch {
+    setUserInfo(user)
+  } catch (error) {
     if (localStorage.getItem(TOKEN_KEY) !== token) return null
-    setUserInfo(null)
+    if (error instanceof RequestError && error.status === 401) clearSession()
+    else setUserInfo(null)
   }
   return currentUser.value
 }
 
 export async function signOut() {
-  const headers = authHeaders()
+  const token = getToken()
   // 先清理本地登录状态，网络异常也不会阻止退出系统。
   clearSession()
   try {
-    const response = await fetch('/api/users/logout', {
-      method: 'POST',
-      headers,
-      signal: AbortSignal.timeout(5000)
-    })
-    return response.ok
+    await logout(token)
+    return true
   } catch {
     return false
   }

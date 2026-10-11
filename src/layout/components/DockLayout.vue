@@ -32,7 +32,7 @@
             <Icon :icon="homeIcon" class="size-6" />
           </button>
         </DockIcon>
-        <DockIcon class="flex justify-center" style="margin: 0 4px">
+        <!-- <DockIcon class="flex justify-center" style="margin: 0 4px">
           <button
             type="button"
             class="dock-action"
@@ -41,7 +41,7 @@
           >
             <Icon :icon="menuIcon" class="size-6" />
           </button>
-        </DockIcon>
+        </DockIcon> -->
 
         <DockIcon class="flex justify-center" style="margin: 0 4px">
           <button

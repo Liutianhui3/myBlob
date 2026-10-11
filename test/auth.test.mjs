@@ -3,51 +3,23 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
-import * as vue from 'vue'
+import { loadClient, flushRequests } from './helpers/client.mjs'
 
 function loadAuth(storage = new Map(), session = new Map()) {
-  const calls = []
-  let response = {
-    ok: true,
-    status: 200,
-    json: async () => ({ id: '1', username: 'reader', name: 'Reader', email: 'reader@example.com' })
-  }
-  const source = fs.readFileSync(new URL('../src/lib/auth.ts', import.meta.url), 'utf8')
-  const context = {
-    exports: {},
-    AbortSignal,
-    require: () => vue,
-    localStorage: {
-      getItem: key => storage.get(key) ?? null,
-      setItem: (key, value) => storage.set(key, value),
-      removeItem: key => storage.delete(key)
-    },
-    sessionStorage: {
-      getItem: key => session.get(key) ?? null,
-      setItem: (key, value) => session.set(key, value),
-      removeItem: key => session.delete(key)
-    },
-    fetch: async (...args) => {
-      calls.push(args)
-      if (response instanceof Error) throw response
-      return typeof response === 'function' ? response() : response
-    }
-  }
-  vm.runInNewContext(
-    ts.transpileModule(source, {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-    }).outputText,
-    context
-  )
-  return {
-    auth: context.exports,
-    calls,
+  const client = loadClient({
     storage,
     session,
-    respond: value => {
-      response = value
+    response: {
+      status: 200,
+      json: async () => ({
+        id: '1',
+        username: 'reader',
+        name: 'Reader',
+        email: 'reader@example.com'
+      })
     }
-  }
+  })
+  return { ...client, auth: client.load('src/lib/auth.ts') }
 }
 
 test('no token blocks entry; saved token restores user; expired token is cleared', async () => {
@@ -175,6 +147,7 @@ test('delayed session checks cannot resurrect a logged-out user or overwrite a n
     const pending = auth.checkSession()
     auth.clearSession()
     if (newLogin) auth.saveSession('new-token', { ...user, id: '2', name: 'New account' })
+    await flushRequests()
     complete({ ok: true, status: 200, json: async () => user })
     assert.equal(await pending, null)
     assert.equal(auth.userInfo.value?.name ?? null, newLogin ? 'New account' : null)

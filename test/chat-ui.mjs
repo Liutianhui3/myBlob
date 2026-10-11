@@ -64,7 +64,7 @@ const requests = []
 await context.addInitScript(() => {
   localStorage.setItem('myblob_token', 'ui-test-token')
 })
-await page.route('**/api/**', async route => {
+await page.route(/^https?:\/\/[^/]+\/api\//, async route => {
   const request = route.request()
   const url = new URL(request.url())
   requests.push({ path: url.pathname, method: request.method(), body: request.postDataJSON() })
@@ -204,7 +204,7 @@ try {
   await page.getByRole('heading', { name: '本周进展' }).waitFor()
   await page.getByRole('button', { name: '清空搜索' }).click()
   await page.getByRole('button', { name: /新对话/ }).click()
-  await page.getByRole('heading', { name: '今天，有什么可以帮你？' }).waitFor()
+  await page.getByRole('heading', { name: /今天，有什么可以帮你/ }).waitFor()
   await page.locator('#nprogress').waitFor({ state: 'hidden' })
   await page.screenshot({ path: path.join(output, 'desktop-welcome.png') })
   await page.getByRole('button', { name: /代码与开发/ }).click()
@@ -338,11 +338,14 @@ try {
   await page.getByRole('heading', { name: '本周进展' }).waitFor()
   await page.getByRole('button', { name: '收起侧栏' }).click()
   await page.getByRole('button', { name: '展开侧栏', exact: true }).click()
-  await page.getByRole('link', { name: '返回系统', exact: true }).click()
+  await page.getByRole('button', { name: '显示导航栏', exact: true }).focus()
+  await page.getByRole('button', { name: '显示导航栏', exact: true }).press('Enter')
+  await page.getByRole('button', { name: '首页', exact: true }).click()
+  await page.waitForURL('**/home')
   await page.getByRole('button', { name: '显示导航栏', exact: true }).focus()
   await page.getByRole('button', { name: '显示导航栏', exact: true }).press('Enter')
   await page.getByRole('button', { name: 'Claude · AI 工作台', exact: true }).click()
-  await page.getByRole('heading', { name: '今天，有什么可以帮你？' }).waitFor()
+  await page.getByRole('heading', { name: /今天，有什么可以帮你/ }).waitFor()
   unauthorized = true
   await page.getByRole('button', { name: '框架对比与技术选型', exact: true }).click()
   await page.waitForURL('**/login?redirect=**')

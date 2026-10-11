@@ -2,8 +2,9 @@
   import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
   import { Icon } from '@iconify/vue'
   import { currentUser } from '@/lib/auth'
-  import { effortLabels, getChatModels } from '@/lib/chat'
-  import type { ChatModel, GenerationOptions } from '@/lib/chat'
+  import { effortLabels } from '@/lib/chat'
+  import { getChatModels } from '@/api/chat'
+  import type { ChatModel, GenerationOptions } from '@/api/chat'
 
   const props = defineProps<{ disabled?: boolean }>()
   const emit = defineEmits<{ change: [value: GenerationOptions | null]; error: [error: unknown] }>()

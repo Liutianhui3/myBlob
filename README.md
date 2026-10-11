@@ -5,6 +5,12 @@
 前端 `npm run dev` 默认运行于 `http://localhost:8082`；Vite 将 `/api` 代理到 `http://localhost:3000`，请同时启动相邻的 `my-blob-api` 项目。
 生产部署需要将 `/api` 反向代理到后端，并通过 HTTPS 提供服务。
 
+### 接口管理
+
+所有后端接口集中在 `src/api`：`auth.ts` 管理登录、注册和退出，`user.ts` 管理用户资料，`chat.ts` 管理会话、模型、消息和流式回复；用户数据类型放在 `types.ts`。
+`src/utils/request.ts` 封装 Axios，统一 `/api` 前缀、Bearer 令牌、15 秒默认超时和错误信息，普通请求直接返回响应数据。登录、注册不携带令牌；退出和会话检查分别使用 5 秒、10 秒超时。聊天流式请求通过 Axios 的 fetch adapter 读取 SSE，使用 630 秒超时并支持取消。
+新增接口时，在对应业务模块调用 `request({ url, method, data, params })`，页面导入具名接口函数。`src/lib` 保留会话状态、资料清理和其他业务逻辑，登录失效时先检查请求所属的会话，避免旧响应清除新登录。
+
 ### AI 工作台
 
 登录后点击底部 Dock 的 Claude 图标进入 `/chat`。页面采用 ChatGPT 风格的侧栏与聊天布局，支持会话搜索与切换、历史分页、多轮流式回复、停止生成、Markdown 与代码高亮、复制代码/回复、Markdown 导出和明暗主题。会话保存在后端；前端不保存聊天正文。`/chat?c=<会话 UUID>` 可恢复指定会话，登录过期后重新登录会返回原页面。

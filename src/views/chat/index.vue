@@ -17,8 +17,8 @@
     getMessages,
     listConversations,
     streamMessage
-  } from '@/lib/chat'
-  import type { ChatMessage, Conversation, GenerationOptions } from '@/lib/chat'
+  } from '@/api/chat'
+  import type { ChatMessage, Conversation, GenerationOptions } from '@/api/chat'
 
   addCollection(icons)
   gsap.registerPlugin(ScrollToPlugin)

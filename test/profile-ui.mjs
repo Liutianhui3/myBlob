@@ -33,7 +33,7 @@ async function settleHome() {
   })
 }
 await page.addInitScript(() => localStorage.setItem('myblob_token', 'profile-ui-token'))
-await page.route('**/api/**', async route => {
+await page.route(/^https?:\/\/[^/]+\/api\//, async route => {
   const request = route.request()
   if (new URL(request.url()).pathname !== '/api/users/me') {
     return route.fulfill({ status: 404, json: {} })

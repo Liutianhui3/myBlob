@@ -42,10 +42,12 @@ await context.addInitScript(() => {
   }
 })
 
-await page.route('**/api/**', route => {
+await page.route(/^https?:\/\/[^/]+\/api\//, route => {
   const pathname = new URL(route.request().url()).pathname
   if (pathname === '/api/users/me')
-    return route.fulfill({ json: { id: 'test', username: '朗读测试' } })
+    return route.fulfill({
+      json: { id: 'test', username: '朗读测试', name: '朗读测试', email: 'speech@example.com' }
+    })
   if (pathname === '/api/conversations/models')
     return route.fulfill({
       json: {

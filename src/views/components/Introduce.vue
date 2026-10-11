@@ -15,7 +15,11 @@
       <span class="relative flex shrink-0 overflow-hidden rounded-full size-28 border">
         <UserAvatar
           class="img aspect-square h-full w-full"
-          :src="userInfo?.avatar || defaultAvatar"
+          :src="userInfo?.avatar"
+          role="img"
+          :aria-label="
+            userInfo?.avatar ? '用户头像' : `${userInfo?.username || userDisplayName}的默认头像`
+          "
         />
       </span>
     </BlurReveal>
@@ -24,7 +28,6 @@
 <script setup>
   import BlurReveal from '@/components/BlurReveal.vue'
   import UserAvatar from '@/components/UserAvatar.vue'
-  import defaultAvatar from '@/assets/images/avatar.jpg'
   import { userInfo, userDisplayName } from '@/lib/auth'
   import { userProfile } from '@/lib/profile'
 </script>
@@ -32,6 +35,7 @@
   .img {
     border-radius: 100%;
     pointer-events: none;
+    font-size: 22px;
   }
   .introduction-copy {
     flex: 1;

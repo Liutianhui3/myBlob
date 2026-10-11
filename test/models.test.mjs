@@ -47,9 +47,9 @@ function settings(t, saved = undefined) {
       if (name === 'vue') return { ...vue, onMounted() {}, onUnmounted() {} }
       if (name === '@iconify/vue') return { Icon: {} }
       if (name === '@/lib/auth') return { currentUser }
+      if (name === '@/api/chat') return { getChatModels: () => getModels() }
       if (name === '@/lib/chat')
         return {
-          getChatModels: () => getModels(),
           effortLabels: {
             auto: '自动',
             low: '低',

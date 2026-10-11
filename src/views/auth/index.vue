@@ -4,6 +4,7 @@
   import { Icon } from '@iconify/vue'
   import { gsap } from 'gsap'
   import { saveSession } from '@/lib/auth'
+  import { login, register } from '@/api/auth'
 
   const route = useRoute()
   const router = useRouter()
@@ -90,22 +91,6 @@
     Object.keys(errors).forEach(key => delete errors[key])
   })
 
-  async function api(action: string, body?: object) {
-    const response = await fetch(`/api/users/${action}`, {
-      method: body ? 'POST' : 'GET',
-      credentials: 'same-origin',
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(15000)
-    })
-    const data = response.status === 204 ? null : await response.json()
-    if (!response.ok)
-      throw new Error(
-        Array.isArray(data.message) ? data.message.join('，') : data.message || '请求失败，请重试'
-      )
-    return data
-  }
-
   async function submit() {
     if (busy.value) return
     Object.keys(errors).forEach(key => delete errors[key])
@@ -129,7 +114,7 @@
     busy.value = true
     try {
       if (registering.value) {
-        await api('register', {
+        await register({
           username: form.username.trim(),
           email: form.email.trim(),
           password: form.password
@@ -138,7 +123,7 @@
         success.value = true
         message.value = '注册成功，请使用新账号登录。'
       } else {
-        const session = await api('login', {
+        const session = await login({
           username: form.username.trim(),
           password: form.password
         })

@@ -1,37 +1,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import vm from 'node:vm'
-import ts from 'typescript'
+import { loadClient } from './helpers/client.mjs'
 
 function client(response) {
-  const calls = []
-  let cleared = false
-  const source = fs
-    .readFileSync(new URL('../src/lib/chat.ts', import.meta.url), 'utf8')
-    .replace(
-      "import { authHeaders, clearSession } from './auth'",
-      'const authHeaders = () => ({ Authorization: "Bearer test-token" }); const clearSession = () => clear()'
-    )
-  const context = {
-    exports: {},
-    AbortSignal,
-    TextDecoder,
-    clear: () => {
-      cleared = true
-    },
-    fetch: async (...args) => {
-      calls.push(args)
-      return response
-    }
+  const storage = new Map([['myblob_token', 'test-token']])
+  const client = loadClient({ storage, response })
+  return {
+    ...client,
+    api: client.load('src/api/chat.ts'),
+    cleared: () => !storage.has('myblob_token')
   }
-  vm.runInNewContext(
-    ts.transpileModule(source, {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-    }).outputText,
-    context
-  )
-  return { api: context.exports, calls, cleared: () => cleared }
 }
 
 function sseResponse(text, chunkSize = 1) {
