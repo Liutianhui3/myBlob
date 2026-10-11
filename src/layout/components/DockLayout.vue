@@ -43,17 +43,19 @@
           </button>
         </DockIcon>
 
-        <DockSeparator style="margin: 0 4px" />
-        <button
-          type="button"
-          :disabled="loggingOut"
-          aria-label="退出系统"
-          :title="currentUser?.username ? `${currentUser.username} · 退出系统` : '退出系统'"
-          class="flex items-center justify-center w-11 h-11 text-foreground rounded-full cursor-pointer focus-visible:outline-2"
-          @click="logout"
-        >
-          <Icon icon="lucide:log-out" class="size-6" />
-        </button>
+        <DockIcon class="flex justify-center" style="margin: 0 4px">
+          <button
+            type="button"
+            class="dock-action"
+            aria-label="Claude · AI 工作台"
+            title="AI 工作台"
+            :aria-current="route.path === '/chat' ? 'page' : undefined"
+            @click="jumpRoute('/chat')"
+          >
+            <img src="@/assets/images/claude.svg" alt="" class="size-6" />
+          </button>
+        </DockIcon>
+
         <DockSeparator style="margin: 0 4px" />
 
         <DockIcon style="margin: 0 8px">
@@ -82,6 +84,34 @@
             <Icon icon="material-symbols:dark-mode" class="size-6" v-else />
           </button>
         </DockIcon>
+
+        <DockSeparator style="margin: 0 4px" />
+
+        <DockIcon class="flex justify-center" style="margin: 0 4px">
+          <button
+            type="button"
+            class="dock-action dock-profile"
+            aria-label="个人资料"
+            title="个人资料"
+            :aria-current="route.path === '/profile' ? 'page' : undefined"
+            @click="jumpRoute('/profile')"
+          >
+            <UserAvatar :src="userProfile.avatar" class="dock-avatar" />
+          </button>
+        </DockIcon>
+
+        <DockIcon class="flex justify-center" style="margin: 0 4px">
+          <button
+            type="button"
+            :disabled="loggingOut"
+            aria-label="退出系统"
+            :title="currentUser?.username ? `${currentUser.username} · 退出系统` : '退出系统'"
+            class="dock-action"
+            @click="logout"
+          >
+            <Icon :icon="logoutIcon" class="size-6" />
+          </button>
+        </DockIcon>
       </Dock>
     </nav>
   </div>
@@ -92,6 +122,8 @@
   import Tippy from '@/components/Tippy.vue'
   import { useGlobalStore } from '@/store'
   import { currentUser, signOut } from '@/lib/auth'
+  import { userProfile } from '@/lib/profile'
+  import UserAvatar from '@/components/UserAvatar.vue'
 
   const store = useGlobalStore()
   const theme = computed(() => store.theme)
@@ -173,6 +205,10 @@
     width: 24,
     height: 24,
     body: '<path fill="#514DEF" fill-rule="evenodd" d="M6 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3zm4 5a1 1 0 0 1 1-1h6a1 1 0 1 1 0 2h-6a1 1 0 0 1-1-1m0 4a1 1 0 0 1 1-1h6a1 1 0 1 1 0 2h-6a1 1 0 0 1-1-1m0 4a1 1 0 0 1 1-1h6a1 1 0 1 1 0 2h-6a1 1 0 0 1-1-1M7 7a1 1 0 0 0 0 2h.001a1 1 0 0 0 0-2zm-1 5a1 1 0 0 1 1-1h.001a1 1 0 1 1 0 2H7a1 1 0 0 1-1-1m1 3a1 1 0 1 0 0 2h.001a1 1 0 1 0 0-2z" clip-rule="evenodd" />'
+  }
+
+  const logoutIcon = {
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 14 14"><path d="M0 0h14v14H0z" fill="none" /><g fill="none" fill-rule="evenodd" clip-rule="evenodd"> <path fill="#A6B3FF" d="M1.5 0A1.5 1.5 0 0 0 0 1.5v11A1.5 1.5 0 0 0 1.5 14h7a1.5 1.5 0 0 0 1.5-1.5v-1.939a2 2 0 0 1-.734-1.311H5.75a2.25 2.25 0 0 1 0-4.5h3.516A2 2 0 0 1 10 3.439V1.5A1.5 1.5 0 0 0 8.5 0z" /> <path fill="#514DEF" d="M10.5 5a.75.75 0 0 1 1.28-.53l2 2a.75.75 0 0 1 0 1.06l-2 2A.75.75 0 0 1 10.5 9V8H5.75a1 1 0 1 1 0-2h4.75z" /></g></svg>'
   }
 
   const openGitHub = () => {
@@ -283,6 +319,27 @@
   .dock-action:focus-visible {
     outline: 2px solid #514def;
     outline-offset: 2px;
+  }
+
+  .dock-avatar {
+    width: 30px;
+    height: 30px;
+  }
+  .dock-profile[aria-current='page'] .dock-avatar {
+    outline: 2px solid #514def;
+    outline-offset: 3px;
+  }
+
+  @media (max-width: 480px) {
+    .dock-panel :deep(.menu-dock) {
+      max-width: calc(100vw - 16px);
+      padding: 6px;
+    }
+    .dock-panel :deep(.menu-dock > div) {
+      flex-shrink: 1;
+      min-width: 0;
+      margin-inline: 2px !important;
+    }
   }
 
   @media (hover: none) {

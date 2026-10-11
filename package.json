@@ -6,6 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc && vite build",
+    "test": "node --test test/*.test.mjs",
+    "test:chat-ui": "node test/chat-ui.mjs",
+    "test:speech-ui": "node test/speech-ui.mjs",
+    "test:profile-ui": "node test/profile-ui.mjs",
     "lint:prettier": "prettier --write  \"src/**/*.{js,ts,json,tsx,css,less,scss,vue,html,md}\""
   },
   "lint-staged": {
@@ -27,6 +31,8 @@
     "@vunk/markdown": "^0.0.12",
     "echarts": "^5.6.0",
     "gsap": "^3.15.0",
+    "highlight.js": "^11.12.0",
+    "markdown-it": "^15.0.2",
     "motion-v": "^1.7.1",
     "nprogress": "^0.2.0",
     "pinia": "^3.0.3",
@@ -45,6 +51,7 @@
   },
   "devDependencies": {
     "@iconify/vue": "^5.0.0",
+    "@types/markdown-it": "^14.2.0",
     "@vitejs/plugin-vue": "^4.5.0",
     "@vitejs/plugin-vue-jsx": "^3.1.0",
     "class-variance-authority": "^0.7.1",
@@ -54,6 +61,7 @@
     "eslint-plugin-prettier": "^5.0.1",
     "eslint-plugin-vue": "^9.18.1",
     "less": "^4.2.0",
+    "playwright": "^1.64.0",
     "prettier": "^3.1.0",
     "rollup-plugin-visualizer": "^5.12.0",
     "tailwind-merge": "^3.3.1",

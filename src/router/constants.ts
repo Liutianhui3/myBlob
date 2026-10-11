@@ -23,6 +23,16 @@ export const constantRoutes: any = [
         path: '/article',
         component: Article,
         meta: { title: '文章' }
+      },
+      {
+        path: '/chat',
+        component: () => import('@/views/chat/index.vue'),
+        meta: { title: 'AI 工作台' }
+      },
+      {
+        path: '/profile',
+        component: () => import('@/views/profile/index.vue'),
+        meta: { title: '个人资料' }
       }
     ]
   }

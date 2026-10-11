@@ -1,8 +1,10 @@
 <template>
   <div
-    class="relative max-w-screen min-h-screen rounded-xl overflow-clip flex flex-col items-center justify-center gap-4 bg-white dark:bg-black"
+    class="relative max-w-screen min-h-screen overflow-clip flex flex-col items-center justify-center bg-white dark:bg-black"
+    :class="{ 'rounded-xl gap-4': !isChat }"
   >
     <SnowfallBg
+      v-if="!isChat"
       :color="theme == 'light' ? '#514DEF' : '#FCD34D'"
       class="absolute inset-0"
       :min-radius="0.2"
@@ -21,5 +23,7 @@
   import { useGlobalStore } from '@/store'
 
   const store = useGlobalStore()
+  const route = useRoute()
+  const isChat = computed(() => route.path === '/chat')
   const theme = computed(() => store.theme)
 </script>

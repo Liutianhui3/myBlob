@@ -8,21 +8,24 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AnimatedTestimonials: typeof import('./src/components/AnimatedTestimonials.vue')['default']
-    AnimatePresence: typeof import('motion-v')['AnimatePresence']
     BentoGrid: typeof import('./src/components/BentoGrid/BentoGrid.vue')['default']
     BentoGridCard: typeof import('./src/components/BentoGrid/BentoGridCard.vue')['default']
     BentoGridItem: typeof import('./src/components/BentoGrid/BentoGridItem.vue')['default']
     BlurReveal: typeof import('./src/components/BlurReveal.vue')['default']
+    ChatMarkdown: typeof import('./src/components/ChatMarkdown.vue')['default']
+    ChatModelSettings: typeof import('./src/components/ChatModelSettings.vue')['default']
     ContainerScroll: typeof import('./src/components/ContainerScroll/ContainerScroll.vue')['default']
     ContainerScrollCard: typeof import('./src/components/ContainerScroll/ContainerScrollCard.vue')['default']
     ContainerScrollTitle: typeof import('./src/components/ContainerScroll/ContainerScrollTitle.vue')['default']
     Dock: typeof import('./src/components/Dock/Dock.vue')['default']
     DockIcon: typeof import('./src/components/Dock/DockIcon.vue')['default']
     DockSeparator: typeof import('./src/components/Dock/DockSeparator.vue')['default']
+    LocationSelect: typeof import('./src/components/LocationSelect.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SnowfallBg: typeof import('./src/components/SnowfallBg.vue')['default']
     SparklesText: typeof import('./src/components/SparklesText.vue')['default']
     Tippy: typeof import('./src/components/Tippy.vue')['default']
+    UserAvatar: typeof import('./src/components/UserAvatar.vue')['default']
   }
 }

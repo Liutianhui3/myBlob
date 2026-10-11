@@ -2,16 +2,18 @@
   <div class="home min-h-[100dvh] max-w-2xl mx-auto py-12 sm:py-24 px-6">
     <!-- 自我介绍 -->
     <Introduce />
+    <ProfileContacts />
     <!-- 关于 -->
     <About />
-    <!-- 工作经历 -->
-    <WorkExperience />
     <!-- 技术栈 -->
     <Skills />
+    <!-- 工作经历 -->
+    <WorkExperience />
+
     <!-- 项目经历 -->
     <!-- <Projects /> -->
     <!-- 交流 -->
-    <Concat />
+    <!-- <Concat /> -->
   </div>
 </template>
 <script setup>
@@ -19,8 +21,7 @@
   import About from '../components/About.vue'
   import WorkExperience from '../components/WorkExperience.vue'
   import Skills from '../components/Skills.vue'
-  import Projects from '../components/Projects.vue'
-  import Concat from '../components/Concat.vue'
+  import ProfileContacts from '../components/ProfileContacts.vue'
 </script>
 <style scoped>
   .home {

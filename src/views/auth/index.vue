@@ -146,7 +146,7 @@
         form.password = ''
         const destination =
           typeof route.query.redirect === 'string' &&
-          /^\/(home|article)(?:[?#]|$)/.test(route.query.redirect)
+          /^\/(home|article|chat|profile)(?:[/?#]|$)/.test(route.query.redirect)
             ? route.query.redirect
             : '/home'
         await router.replace(destination)
