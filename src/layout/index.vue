@@ -12,9 +12,7 @@
 
     <router-view></router-view>
   </div>
-  <div class="footer">
-    <DockLayout />
-  </div>
+  <DockLayout />
 </template>
 <script setup>
   import SnowfallBg from '@/components/SnowfallBg.vue'
@@ -25,14 +23,3 @@
   const store = useGlobalStore()
   const theme = computed(() => store.theme)
 </script>
-<style scoped>
-  .footer {
-    width: 100%;
-    position: fixed;
-    bottom: 0px;
-    margin: 0 auto;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-</style>
