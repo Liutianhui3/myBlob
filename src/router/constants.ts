@@ -3,9 +3,11 @@ import Home from '@/views/home/index.vue'
 import Article from '@/views/article/index.vue'
 
 export const constantRoutes: any = [
+  { path: '/login', component: () => import('@/views/auth/index.vue'), meta: { title: '登录' } },
+  { path: '/register', component: () => import('@/views/auth/index.vue'), meta: { title: '注册' } },
   {
     path: '/',
-    redirect: '/home'
+    redirect: '/login'
   },
   {
     path: '/basicLayout',

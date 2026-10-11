@@ -8,6 +8,16 @@
     </DockIcon>
 
     <DockSeparator style="margin: 0 4px" />
+    <button
+      type="button"
+      :disabled="loggingOut"
+      aria-label="退出系统"
+      :title="currentUser?.username ? `${currentUser.username} · 退出系统` : '退出系统'"
+      class="flex items-center justify-center w-11 h-11 text-foreground rounded-full cursor-pointer focus-visible:outline-2"
+      @click="logout"
+    >
+      <Icon icon="lucide:log-out" class="size-6" />
+    </button>
 
     <DockIcon style="margin: 0 8px" @click="openGitHub">
       <Tippy
@@ -33,6 +43,7 @@
   import { Icon } from '@iconify/vue'
   import Tippy from '@/components/Tippy.vue'
   import { useGlobalStore } from '@/store'
+  import { currentUser, signOut } from '@/lib/auth'
 
   const store = useGlobalStore()
   const theme = computed(() => store.theme)
@@ -40,6 +51,17 @@
   const router = useRouter()
 
   const dockRef = ref()
+  const loggingOut = ref(false)
+  const logout = async () => {
+    loggingOut.value = true
+    try {
+      const revocation = signOut()
+      await router.replace('/login')
+      await revocation
+    } finally {
+      loggingOut.value = false
+    }
+  }
 
   const homeIcon = {
     body: '<g fill="none"><path fill="url(#SVGkm4eqcHj)" d="M6 9h4v5H6z" /><path fill="url(#SVG4sqiUdhg)" d="M8.687 2.273a1 1 0 0 0-1.374 0l-4.844 4.58A1.5 1.5 0 0 0 2 7.943v4.569a1.5 1.5 0 0 0 1.5 1.5h3v-4a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 .5.5v4h3a1.5 1.5 0 0 0 1.5-1.5v-4.57a1.5 1.5 0 0 0-.47-1.09z" /><path fill="url(#SVGbhYexcuE)" fill-rule="evenodd" d="m8.004 2.636l5.731 5.41a.75.75 0 1 0 1.03-1.091L8.86 1.382a1.25 1.25 0 0 0-1.724.007L1.23 7.059a.75.75 0 0 0 1.038 1.082z" clip-rule="evenodd" /><defs><linearGradient id="SVGkm4eqcHj" x1="8" x2="4.796" y1="9" y2="14.698" gradientUnits="userSpaceOnUse"><stop stop-color="#fff" /><stop offset="1" stop-color="#fff" /></linearGradient><linearGradient id="SVG4sqiUdhg" x1="3.145" x2="14.93" y1="1.413" y2="10.981" gradientUnits="userSpaceOnUse"><stop stop-color="#A6B3FF" /><stop offset="1" stop-color="#A6B3FF" /></linearGradient><linearGradient id="SVGbhYexcuE" x1="10.262" x2="6.945" y1="-.696" y2="7.895" gradientUnits="userSpaceOnUse"><stop stop-color="#514DEF" /><stop offset="1" stop-color="#514DEF" /></linearGradient></defs></g>'
