@@ -1,4 +1,5 @@
 <script setup lang="ts">
+  import { createId } from '@/lib/id'
   import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
   import { useRoute, useRouter } from 'vue-router'
   import { Icon, addCollection } from '@iconify/vue'
@@ -12,13 +13,14 @@
   import { createMessageReader } from '@/lib/speech'
   import { useGlobalStore } from '@/store'
   import {
+    deleteConversation,
     ChatError,
     createConversation,
     getMessages,
     listConversations,
     streamMessage
   } from '@/api/chat'
-  import type { ChatMessage, Conversation, GenerationOptions } from '@/api/chat'
+  import type { ChatAttachment, ChatMessage, Conversation, GenerationOptions } from '@/api/chat'
 
   addCollection(icons)
   gsap.registerPlugin(ScrollToPlugin)
@@ -26,8 +28,199 @@
   const router = useRouter()
   const store = useGlobalStore()
   const conversations = ref<Conversation[]>([])
+  const menuConversation = ref<Conversation>()
+  const menuPosition = ref({ left: '0px', top: '0px' })
+  const deletingId = ref('')
+  let menuTrigger: HTMLButtonElement | undefined
+  function closeConversationMenu() {
+    menuConversation.value = undefined
+    menuTrigger?.focus()
+  }
+  async function openConversationMenu(conversation: Conversation, event: MouseEvent) {
+    if (menuConversation.value?.id === conversation.id) {
+      closeConversationMenu()
+      return
+    }
+    menuTrigger = event.currentTarget as HTMLButtonElement
+    const rect = menuTrigger.getBoundingClientRect()
+    menuPosition.value = {
+      left: `${Math.max(8, Math.min(rect.left, window.innerWidth - 188))}px`,
+      top: `${Math.min(rect.bottom + 6, window.innerHeight - 80)}px`
+    }
+    menuConversation.value = conversation
+    await nextTick()
+    document.getElementById('delete-conversation-action')?.focus()
+  }
+  async function removeConversation() {
+    const conversation = menuConversation.value
+    if (!conversation || deletingId.value || busy.value) return
+    closeConversationMenu()
+    if (!window.confirm(`删除「${conversation.title}」？该会话及全部消息将被永久删除。`)) return
+    deletingId.value = conversation.id
+    try {
+      await deleteConversation(conversation.id)
+      conversations.value = conversations.value.filter(item => item.id !== conversation.id)
+      if (activeId.value === conversation.id) await selectConversation('')
+      showNotice('会话已删除')
+    } catch (cause) {
+      error.value = await handleError(cause)
+    } finally {
+      deletingId.value = ''
+    }
+  }
   const messages = ref<ChatMessage[]>([])
   const draft = ref('')
+  const attachments = ref<ChatAttachment[]>([])
+  const attachmentInput = ref<HTMLInputElement>()
+  const readingAttachments = ref(false)
+  const draggingFiles = ref(false)
+  let dragDepth = 0
+  const canDropAttachments = computed(
+    () =>
+      !busy.value &&
+      !historyLoading.value &&
+      !readingAttachments.value &&
+      attachments.value.length < 4
+  )
+  function isFileDrag(event: DragEvent) {
+    return Array.from(event.dataTransfer?.types ?? []).includes('Files')
+  }
+  function resetFileDrag() {
+    dragDepth = 0
+    draggingFiles.value = false
+  }
+  function enterFileDrag(event: DragEvent) {
+    if (!isFileDrag(event)) return
+    event.preventDefault()
+    dragDepth++
+    draggingFiles.value = true
+  }
+  function overFileDrag(event: DragEvent) {
+    if (!isFileDrag(event)) return
+    event.preventDefault()
+    draggingFiles.value = true
+    if (event.dataTransfer)
+      event.dataTransfer.dropEffect = canDropAttachments.value ? 'copy' : 'none'
+  }
+  function leaveFileDrag(event: DragEvent) {
+    if (!draggingFiles.value) return
+    dragDepth = Math.max(0, dragDepth - 1)
+    if (
+      !dragDepth ||
+      (event.relatedTarget === null &&
+        (event.clientX <= 0 ||
+          event.clientY <= 0 ||
+          event.clientX >= window.innerWidth ||
+          event.clientY >= window.innerHeight))
+    )
+      resetFileDrag()
+  }
+  async function dropFiles(event: DragEvent) {
+    if (!isFileDrag(event)) return
+    event.preventDefault() // 防止浏览器跳转打开本地文件。
+    resetFileDrag()
+    if (!canDropAttachments.value) {
+      showNotice('请等待当前操作完成，或移除附件后再添加。')
+      return
+    }
+    await readAttachments(Array.from(event.dataTransfer?.files ?? []))
+    await nextTick()
+    textarea.value?.focus()
+  }
+  function cancelFileDrag(event: KeyboardEvent) {
+    if (event.key === 'Escape') resetFileDrag()
+  }
+
+  async function addAttachments(event: Event) {
+    const input = event.target as HTMLInputElement
+    const files = Array.from(input.files ?? [])
+    input.value = ''
+    await readAttachments(files)
+  }
+  function pasteAttachments(event: ClipboardEvent) {
+    const files = Array.from(event.clipboardData?.items ?? [])
+      .filter(item => item.kind === 'file')
+      .map(item => item.getAsFile())
+      .filter((file): file is File => file !== null)
+    if (!files.length) return // 普通文字继续使用浏览器默认粘贴行为。
+    event.preventDefault()
+    void readAttachments(files)
+  }
+  async function readAttachments(files: File[]) {
+    if (busy.value || readingAttachments.value || historyLoading.value || !files.length) return
+    const loadingStarted = performance.now()
+    readingAttachments.value = true
+    error.value = ''
+    const sessionId = activeId.value
+    try {
+      const additions: ChatAttachment[] = []
+      if (attachments.value.length + files.length > 4) throw new Error('每条消息最多 4 个附件。')
+      for (const file of files) {
+        if (file.name.length > 255) throw new Error('文件名称过长。')
+        if (['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+          if (!file.size || file.size > 2 * 1024 * 1024) throw new Error('单张图片最大 2 MB。')
+          const data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(String(reader.result))
+            reader.onerror = () => reject(new Error('图片读取失败。'))
+            reader.readAsDataURL(file)
+          })
+          additions.push({ name: file.name, type: 'image', mime: file.type, data })
+        } else if (/\.(txt|md)$/i.test(file.name)) {
+          if (!file.size || file.size > 100000) throw new Error('单个文档最大 100 KB。')
+          const text = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer())
+          if (!text.trim() || text.includes('\0')) throw new Error('请选择非空的 UTF-8 文本文档。')
+          additions.push({ name: file.name, type: 'document', mime: 'text/plain', text })
+        } else throw new Error('支持 PNG、JPEG、WebP 图片和 TXT、Markdown 文档。')
+      }
+      const combined = [...attachments.value, ...additions]
+      const bytes = combined.reduce(
+        (sum, a) =>
+          sum +
+          (a.type === 'image'
+            ? (a.data!.split(',')[1].length * 3) / 4
+            : new TextEncoder().encode(a.text).length),
+        0
+      )
+      if (bytes > 6 * 1024 * 1024) throw new Error('附件总大小最大 6 MB。')
+      await new Promise(resolve =>
+        setTimeout(resolve, Math.max(0, 350 - (performance.now() - loadingStarted)))
+      )
+      if (!disposed && sessionId === activeId.value) attachments.value = combined
+    } catch (cause) {
+      error.value = cause instanceof Error ? cause.message : '附件读取失败。'
+    } finally {
+      readingAttachments.value = false
+    }
+  }
+  function expandAttachments(element: Element, done: () => void) {
+    const el = element as HTMLElement
+    gsap.fromTo(
+      el,
+      { height: 0, opacity: 0 },
+      {
+        height: el.scrollHeight,
+        opacity: 1,
+        duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 0.24,
+        ease: 'power2.out',
+        onComplete: () => {
+          el.style.height = 'auto'
+          done()
+        }
+      }
+    )
+  }
+  function collapseAttachments(element: Element, done: () => void) {
+    const el = element as HTMLElement
+    gsap.killTweensOf(el)
+    gsap.to(el, {
+      height: 0,
+      opacity: 0,
+      duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 0.2,
+      ease: 'power2.inOut',
+      onComplete: done
+    })
+  }
   const search = ref('')
   const showSearch = ref(false)
   const sidebarOpen = ref(window.innerWidth > 800)
@@ -76,7 +269,8 @@
   const remaining = computed(() => 16000 - draft.value.length)
   const canSend = computed(
     () =>
-      !!draft.value.trim() &&
+      (!!draft.value.trim() || attachments.value.length > 0) &&
+      !readingAttachments.value &&
       !!generationSettings.value &&
       remaining.value >= 0 &&
       !busy.value &&
@@ -245,6 +439,7 @@
     if (el) atBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < 100
   }
   async function loadConversation(id = activeId.value) {
+    resetFileDrag()
     messageReader.stop()
     stopScrollAnimation()
     history?.abort()
@@ -296,6 +491,7 @@
     if (busy.value || olderLoading.value) return
     if (window.innerWidth <= 800) sidebarOpen.value = false
     draft.value = ''
+    attachments.value = []
     error.value = ''
     notice.value = ''
     await router.replace({ path: '/chat', query: id ? { c: id } : {} })
@@ -322,7 +518,8 @@
   }
   async function send() {
     if (!canSend.value) return
-    const content = draft.value.trim()
+    const sentAttachments = [...attachments.value]
+    const content = draft.value.trim() || '请分析附件内容。'
     const selection = { ...generationSettings.value! }
     const controller = new AbortController()
     generation = controller
@@ -349,9 +546,10 @@
       }
       controller.signal.throwIfAborted()
       const now = new Date().toISOString()
-      const turnId = crypto.randomUUID()
+      const turnId = createId()
       messages.value.push({
         id: `local-${turnId}`,
+        attachments: sentAttachments,
         turnId,
         sequence: '',
         role: 'user',
@@ -373,6 +571,7 @@
       userMessage = messages.value[messages.value.length - 2]
       reply = messages.value[messages.value.length - 1]
       draft.value = ''
+      attachments.value = []
       await nextTick()
       resizeInput()
       atBottom.value = true
@@ -399,14 +598,18 @@
               showNotice('回复达到长度上限，可发送「继续」接着生成。')
           }
         },
-        selection
+        selection,
+        sentAttachments
       )
     } catch (cause) {
       if (reply) reply.status = controller.signal.aborted ? 'cancelled' : 'failed'
       if (!disposed && (!id || id === activeId.value)) {
         if (controller.signal.aborted) showNotice('已停止生成')
         else error.value = await handleError(cause)
-        if (!started && !controller.signal.aborted) draft.value = content
+        if (!started && !controller.signal.aborted) {
+          draft.value = content
+          attachments.value = sentAttachments
+        }
         // Upstream failure can persist a user turn before start; reconcile with history.
         if (id) {
           try {
@@ -487,12 +690,26 @@
         gsap.set(sidebar.value!, { width: sidebarWidth() })
       }
     )
+    window.addEventListener('dragenter', enterFileDrag)
+    window.addEventListener('dragover', overFileDrag)
+    window.addEventListener('dragleave', leaveFileDrag)
+    window.addEventListener('drop', dropFiles)
+    window.addEventListener('dragend', resetFileDrag)
+    window.addEventListener('blur', resetFileDrag)
+    window.addEventListener('keydown', cancelFileDrag)
     document.addEventListener('keydown', sidebarShortcut)
     void refreshList()
     void loadConversation()
     textarea.value?.focus()
   })
   onUnmounted(() => {
+    window.removeEventListener('dragenter', enterFileDrag)
+    window.removeEventListener('dragover', overFileDrag)
+    window.removeEventListener('dragleave', leaveFileDrag)
+    window.removeEventListener('drop', dropFiles)
+    window.removeEventListener('dragend', resetFileDrag)
+    window.removeEventListener('blur', resetFileDrag)
+    window.removeEventListener('keydown', cancelFileDrag)
     messageReader.stop()
     stopScrollAnimation()
     scrollMotion?.revert()
@@ -603,18 +820,20 @@
           <span>新对话</span>
           <span class="new-chat-plus">开始</span>
         </button>
-        <label v-if="showSearch" class="search-field">
-          <Icon icon="hugeicons:search-01" />
-          <input
-            ref="searchInput"
-            v-model="search"
-            aria-label="搜索会话标题"
-            placeholder="搜索会话…"
-          />
-          <button v-if="search" class="icon-button" aria-label="清空搜索" @click="search = ''">
-            <Icon icon="hugeicons:cancel-01" />
-          </button>
-        </label>
+        <Transition name="conversation-search">
+          <label v-if="showSearch" class="search-field">
+            <Icon icon="hugeicons:search-01" />
+            <input
+              ref="searchInput"
+              v-model="search"
+              aria-label="搜索会话标题"
+              placeholder="搜索会话…"
+            />
+            <button v-if="search" class="icon-button" aria-label="清空搜索" @click="search = ''">
+              <Icon icon="hugeicons:cancel-01" />
+            </button>
+          </label>
+        </Transition>
         <div class="history-list">
           <div v-if="listLoading && !conversations.length" class="sidebar-empty" role="status">
             正在加载会话…
@@ -626,18 +845,39 @@
           <template v-else-if="groups.length">
             <section v-for="group in groups" :key="group.label" class="history-group">
               <h2>{{ group.label }}</h2>
-              <button
+              <div
                 v-for="conversation in group.items"
                 :key="conversation.id"
-                class="history-item"
-                :class="{ selected: activeId === conversation.id }"
-                :title="conversation.title"
-                :aria-current="activeId === conversation.id ? 'page' : undefined"
-                :disabled="busy || olderLoading"
-                @click="selectConversation(conversation.id)"
+                class="history-row"
+                :class="{
+                  selected: activeId === conversation.id,
+                  'menu-open': menuConversation?.id === conversation.id
+                }"
               >
-                <span>{{ conversation.title }}</span>
-              </button>
+                <button
+                  class="history-item"
+                  :title="conversation.title"
+                  :aria-current="activeId === conversation.id ? 'page' : undefined"
+                  :disabled="busy || olderLoading || !!deletingId"
+                  @click="selectConversation(conversation.id)"
+                >
+                  <span>{{ conversation.title }}</span>
+                </button>
+                <button
+                  class="conversation-more"
+                  :aria-label="`更多操作：${conversation.title}`"
+                  aria-haspopup="menu"
+                  :aria-expanded="menuConversation?.id === conversation.id"
+                  :disabled="busy || olderLoading || !!deletingId"
+                  @click.stop="openConversationMenu(conversation, $event)"
+                >
+                  <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+                    <circle cx="4" cy="10" r="1.5" fill="currentColor" />
+                    <circle cx="10" cy="10" r="1.5" fill="currentColor" />
+                    <circle cx="16" cy="10" r="1.5" fill="currentColor" />
+                  </svg>
+                </button>
+              </div>
             </section>
             <p class="history-limit">显示最近 {{ conversations.length }} 个会话</p>
           </template>
@@ -683,7 +923,7 @@
             <Icon icon="hugeicons:book-open-01" />
             <span>知识库</span>
           </RouterLink>
-          <span class="text-mode">文本会话</span>
+          <!-- <span class="text-mode">文本会话</span> -->
           <button
             class="export-button"
             :disabled="!messages.length || busy || historyLoading"
@@ -743,7 +983,24 @@
             :class="message.role"
             :aria-label="message.role === 'user' ? '你的消息' : 'AI 回复'"
           >
-            <div v-if="message.role === 'user'" class="user-bubble">{{ message.content }}</div>
+            <div v-if="message.role === 'user'" class="user-bubble">
+              <div v-if="message.attachments?.length" class="attachment-list">
+                <div
+                  v-for="(attachment, index) in message.attachments"
+                  :key="index"
+                  class="attachment-card"
+                >
+                  <img
+                    v-if="attachment.type === 'image'"
+                    :src="attachment.data"
+                    :alt="attachment.name"
+                  />
+                  <span v-else aria-hidden="true">▤</span>
+                  <span>{{ attachment.name }}</span>
+                </div>
+              </div>
+              {{ message.content }}
+            </div>
             <template v-else>
               <div class="assistant-label">
                 <img src="@/assets/images/claude.svg" alt="" />
@@ -821,6 +1078,48 @@
         </div>
         <p v-if="notice" class="notice" role="status">{{ notice }}</p>
         <form class="composer" @submit.prevent="send">
+          <Transition
+            :css="false"
+            @enter="expandAttachments"
+            @leave="collapseAttachments"
+            @enter-cancelled="gsap.killTweensOf($event)"
+            @leave-cancelled="gsap.killTweensOf($event)"
+          >
+            <div v-if="attachments.length || readingAttachments" class="attachment-expansion">
+              <div class="attachment-list draft-attachments">
+                <div
+                  v-if="readingAttachments"
+                  class="attachment-card attachment-loading"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span class="attachment-spinner" aria-hidden="true" />
+                  <span>正在读取附件…</span>
+                </div>
+                <div
+                  v-for="(attachment, index) in attachments"
+                  :key="index"
+                  class="attachment-card attachment-reveal"
+                >
+                  <img
+                    v-if="attachment.type === 'image'"
+                    :src="attachment.data"
+                    :alt="attachment.name"
+                  />
+                  <span v-else aria-hidden="true">▤</span>
+                  <span>{{ attachment.name }}</span>
+                  <button
+                    type="button"
+                    :aria-label="`移除 ${attachment.name}`"
+                    :disabled="busy"
+                    @click="attachments.splice(index, 1)"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Transition>
           <textarea
             ref="textarea"
             v-model="draft"
@@ -829,8 +1128,38 @@
             rows="1"
             :disabled="historyLoading"
             @keydown="onKeydown"
+            @paste="pasteAttachments"
           />
           <div class="composer-toolbar">
+            <input
+              ref="attachmentInput"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,.txt,.md"
+              multiple
+              hidden
+              @change="addAttachments"
+            />
+            <button
+              type="button"
+              class="icon-button attach-button"
+              aria-label="上传图片或文档"
+              title="图片 PNG/JPEG/WebP ≤2MB；文档 TXT/MD ≤100KB；最多4个"
+              :disabled="busy || historyLoading || readingAttachments || attachments.length >= 4"
+              @click="attachmentInput?.click()"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                aria-hidden="true"
+              >
+                <path d="m8 12 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l9-9" />
+                <path d="m7 13 7-7" />
+              </svg>
+            </button>
             <span class="composer-toolbar-spacer"></span>
             <span
               v-if="draft.length > 15000"
@@ -868,10 +1197,215 @@
         <p class="composer-disclaimer">AI 的回答可能存在偏差，请核实重要信息。</p>
       </div>
     </section>
+    <template v-if="menuConversation">
+      <div class="conversation-menu-backdrop" @click="closeConversationMenu" />
+      <div
+        class="conversation-menu"
+        :style="menuPosition"
+        role="menu"
+        aria-label="会话操作"
+        @keydown.esc.stop.prevent="closeConversationMenu"
+        @keydown.tab="closeConversationMenu"
+      >
+        <button id="delete-conversation-action" role="menuitem" @click="removeConversation">
+          <Icon icon="hugeicons:delete-02" />
+          <span>删除</span>
+        </button>
+      </div>
+    </template>
+    <Transition name="file-drop">
+      <div v-if="draggingFiles" class="file-drop-overlay" role="status" aria-live="polite">
+        <div class="file-drop-content">
+          <div class="file-drop-art" aria-hidden="true">
+            <svg class="drop-document" width="64" height="76" viewBox="0 0 64 76" fill="none">
+              <rect x="8" y="4" width="48" height="64" rx="9" fill="#8a83ff" />
+              <path
+                d="M21 23h22M21 33h22M21 43h15"
+                stroke="white"
+                stroke-width="4"
+                stroke-linecap="round"
+              />
+            </svg>
+            <svg class="drop-image" width="72" height="64" viewBox="0 0 72 64" fill="none">
+              <rect x="3" y="3" width="66" height="58" rx="14" fill="#6655ef" />
+              <circle cx="48" cy="20" r="6" fill="white" />
+              <path
+                d="m15 46 14-17 12 14 7-8 10 11"
+                stroke="white"
+                stroke-width="5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </div>
+          <h2>{{ canDropAttachments ? '添加到对话' : '暂时无法添加附件' }}</h2>
+          <p>
+            {{
+              canDropAttachments
+                ? '将图片或文档拖放到这里，即可添加到输入框'
+                : '请等待当前操作完成，或移除附件后再添加'
+            }}
+          </p>
+          <small>PNG / JPEG / WebP · TXT / Markdown · 最多 4 个附件</small>
+        </div>
+      </div>
+    </Transition>
   </main>
 </template>
 
 <style scoped>
+  .file-drop-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--chat-bg) 88%, transparent);
+    backdrop-filter: blur(3px);
+    pointer-events: none;
+  }
+  .file-drop-content {
+    text-align: center;
+    padding: 28px;
+  }
+  .file-drop-content h2 {
+    font-size: 26px;
+    font-weight: 600;
+    margin: 22px 0 12px;
+  }
+  .file-drop-content p {
+    font-size: 15px;
+    margin: 0 0 12px;
+  }
+  .file-drop-content small {
+    font-size: 12px;
+    color: var(--chat-muted);
+  }
+  .file-drop-art {
+    position: relative;
+    width: 128px;
+    height: 100px;
+    margin: 0 auto;
+  }
+  .drop-document {
+    position: absolute;
+    right: 0;
+    top: 0;
+    transform: rotate(15deg);
+  }
+  .drop-image {
+    position: absolute;
+    left: 8px;
+    bottom: 0;
+    transform: rotate(-8deg);
+    filter: drop-shadow(0 8px 10px #6655ef25);
+  }
+  .file-drop-enter-active,
+  .file-drop-leave-active {
+    transition: opacity 0.18s ease;
+  }
+  .file-drop-enter-active .file-drop-content,
+  .file-drop-leave-active .file-drop-content {
+    transition: transform 0.18s ease;
+  }
+  .file-drop-enter-from,
+  .file-drop-leave-to {
+    opacity: 0;
+  }
+  .file-drop-enter-from .file-drop-content,
+  .file-drop-leave-to .file-drop-content {
+    transform: translateY(8px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .file-drop-enter-active,
+    .file-drop-leave-active,
+    .file-drop-enter-active .file-drop-content,
+    .file-drop-leave-active .file-drop-content {
+      transition: none;
+    }
+  }
+
+  .attachment-expansion {
+    overflow: hidden;
+  }
+  .attachment-loading {
+    min-height: 60px;
+    min-width: 170px;
+  }
+  .attachment-spinner {
+    display: block;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    border: 2px solid var(--chat-border);
+    border-top-color: #d97757;
+    border-radius: 50%;
+    animation: attachment-spin 0.75s linear infinite;
+  }
+  .attachment-reveal {
+    animation: attachment-appear 0.22s ease-out;
+  }
+  @keyframes attachment-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes attachment-appear {
+    from {
+      opacity: 0;
+      transform: translateY(5px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .attachment-reveal,
+    .attachment-spinner {
+      animation: none;
+    }
+  }
+  .attachment-list {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .draft-attachments {
+    padding: 4px 0;
+  }
+  .attachment-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 9px;
+    max-width: 230px;
+    border: 1px solid var(--chat-border);
+    border-radius: 10px;
+    background: var(--chat-bg);
+    font-size: 12px;
+  }
+  .attachment-card img {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    border-radius: 5px;
+  }
+  .attachment-card > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .attachment-card button {
+    border: 0;
+    background: transparent;
+    color: var(--chat-muted);
+    padding: 4px;
+    font-size: 18px;
+  }
+
   .chat-app {
     --chat-bg: #fcfcfc;
     --chat-sidebar: #f8f8f8;
@@ -1083,6 +1617,42 @@
     border-radius: 9px;
     padding: 3px 8px;
     background: var(--chat-input);
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease;
+  }
+  .search-field:focus-within {
+    border-color: #d97757;
+    box-shadow: 0 0 0 2px rgb(217 119 87 / 14%);
+  }
+  .conversation-search-enter-active,
+  .conversation-search-leave-active {
+    overflow: hidden;
+    transition:
+      opacity 180ms ease,
+      transform 180ms ease,
+      max-height 180ms ease,
+      margin-bottom 180ms ease,
+      padding-top 180ms ease,
+      padding-bottom 180ms ease;
+    max-height: 60px;
+    transform-origin: top center;
+  }
+  .conversation-search-enter-from,
+  .conversation-search-leave-to {
+    opacity: 0;
+    transform: translateY(-6px);
+    max-height: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .search-field,
+    .conversation-search-enter-active,
+    .conversation-search-leave-active {
+      transition: none;
+    }
   }
   .search-field .iconify {
     width: 16px;
@@ -1094,6 +1664,11 @@
     background: transparent;
     color: inherit;
     font-size: 12px;
+    border: 0;
+    box-shadow: none;
+  }
+  .chat-app .search-field input:focus-visible {
+    outline: none;
   }
   .history-list {
     flex: 1;
@@ -1106,6 +1681,86 @@
     font-size: 11px;
     font-weight: 400;
     padding: 15px 10px 8px;
+  }
+  .history-row {
+    display: flex;
+    align-items: center;
+    border-radius: 8px;
+  }
+  .history-row:hover,
+  .history-row.selected,
+  .history-row.menu-open {
+    background: var(--chat-hover);
+  }
+  .history-row .history-item {
+    flex: 1;
+    min-width: 0;
+  }
+  .conversation-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    opacity: 0;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    margin-right: 5px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--chat-text);
+    font-size: 22px !important;
+  }
+  .history-row:hover .conversation-more,
+  .history-row:focus-within .conversation-more,
+  .history-row.selected .conversation-more,
+  .history-row.menu-open .conversation-more {
+    opacity: 1;
+  }
+  .conversation-more:hover,
+  .conversation-more:active {
+    background: transparent;
+  }
+  .conversation-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 49;
+  }
+  .conversation-menu {
+    position: fixed;
+    z-index: 50;
+    width: 180px;
+    padding: 7px;
+    border: 1px solid var(--chat-border);
+    border-radius: 16px;
+    background: var(--chat-bg);
+    box-shadow: 0 12px 35px #0002;
+  }
+  .conversation-menu button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: #e54848;
+    padding: 12px;
+    font-size: 14px !important;
+    text-align: left;
+  }
+  .conversation-menu button:hover {
+    background: var(--chat-hover);
+  }
+  .conversation-menu .iconify {
+    width: 20px;
+    height: 20px;
+  }
+  @media (hover: none) {
+    .conversation-more {
+      opacity: 1;
+    }
   }
   .history-item {
     display: block;
@@ -1521,9 +2176,11 @@
     background: var(--chat-input);
     padding: 16px 16px 10px 20px;
     box-shadow: 0 2px 12px #00000004;
+
+    transition: border-color 0.25s ease-in;
   }
   .composer:focus-within {
-    border-color: #bcb5b0;
+    border-color: #d97757;
   }
   .composer textarea {
     display: block;

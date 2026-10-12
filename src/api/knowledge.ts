@@ -15,6 +15,7 @@ export interface KnowledgeDocument {
   chunkOverlap: number
   chunkCount: number
   createdAt: string
+  embeddedChunks?: number
 }
 export interface ChunkPage {
   items: { id: string; position: number; content: string; charCount: number }[]
@@ -61,3 +62,11 @@ export const getChunks = (id: string, documentId: string, page: number, signal?:
   })
 export const deleteDocument = (id: string, documentId: string) =>
   request({ url: `${basePath(id)}/documents/${encodeURIComponent(documentId)}`, method: 'DELETE' })
+
+export const embedDocument = (id: string, documentId: string, signal?: AbortSignal) =>
+  request<{ documentId: string; model: string; dimensions: number; embeddedChunks: number }>({
+    url: `${basePath(id)}/documents/${encodeURIComponent(documentId)}/embeddings`,
+    method: 'POST',
+    signal,
+    timeout: 0
+  })

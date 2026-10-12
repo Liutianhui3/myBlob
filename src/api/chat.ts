@@ -9,7 +9,15 @@ export interface Conversation {
   updatedAt: string
 }
 
+export interface ChatAttachment {
+  name: string
+  type: 'image' | 'document'
+  mime: string
+  data?: string
+  text?: string
+}
 export interface ChatMessage {
+  attachments?: ChatAttachment[]
   id: string
   turnId: string
   sequence: string
@@ -61,6 +69,13 @@ async function withChatErrors<T>(send: () => Promise<T>): Promise<T> {
 
 export const listConversations = (signal?: AbortSignal) =>
   withChatErrors(() => request<Conversation[]>({ url: '/conversations', signal }))
+export const deleteConversation = (id: string) =>
+  withChatErrors(() =>
+    request<{ id: string }>({
+      url: `/conversations/${encodeURIComponent(id)}`,
+      method: 'DELETE'
+    })
+  )
 export const getChatModels = (signal?: AbortSignal) =>
   withChatErrors(() => request<ModelCatalog>({ url: '/conversations/models', signal }))
 export const createConversation = (title: string, signal?: AbortSignal) =>
@@ -94,7 +109,8 @@ export async function streamMessage(
   id: string,
   content: string,
   callbacks: StreamCallbacks,
-  options?: GenerationOptions
+  options?: GenerationOptions,
+  attachments?: ChatAttachment[]
 ) {
   const response = await withChatErrors(() =>
     requestStream({
@@ -103,6 +119,7 @@ export async function streamMessage(
       headers: { Accept: 'text/event-stream' },
       data: {
         content,
+        ...(attachments?.length ? { attachments } : {}),
         ...(options ? { model: options.model, reasoningEffort: options.reasoningEffort } : {})
       },
       signal: callbacks.signal,

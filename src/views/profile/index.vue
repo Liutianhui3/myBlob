@@ -1,4 +1,5 @@
 <script setup lang="ts">
+  import { createId } from '@/lib/id'
   import { computed, onUnmounted, reactive, ref, watch } from 'vue'
   import { onBeforeRouteLeave, useRouter } from 'vue-router'
   import { Icon, addCollection } from '@iconify/vue'
@@ -64,7 +65,7 @@
   function addExperience() {
     if (draft.workExperiences.length >= 20) return
     draft.workExperiences.push({
-      id: crypto.randomUUID(),
+      id: createId(),
       company: '',
       position: '',
       startDate: '',

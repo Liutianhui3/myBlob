@@ -11,7 +11,8 @@
     listDocuments,
     uploadDocument,
     getChunks,
-    deleteDocument
+    deleteDocument,
+    embedDocument
   } from '@/api/knowledge'
   import type { KnowledgeBase, KnowledgeDocument, ChunkPage } from '@/api/knowledge'
 
@@ -47,6 +48,27 @@
   const previewLoading = ref(false)
   const deleting = ref<KnowledgeDocument>()
   const deleteBusy = ref(false)
+  const embeddingIds = ref(new Set<string>())
+  async function vectorize(doc: KnowledgeDocument) {
+    if (embeddingIds.value.has(doc.id)) return
+    const baseId = selectedId.value
+    embeddingIds.value.add(doc.id)
+    error.value = ''
+    notice.value = ''
+    try {
+      const result = await embedDocument(baseId, doc.id, lifetime.signal)
+      doc.embeddedChunks = result.embeddedChunks
+      if (selectedId.value === baseId) {
+        const current = documents.value.find(item => item.id === doc.id)
+        if (current) current.embeddedChunks = result.embeddedChunks
+        notice.value = `「${doc.name}」向量化完成，共 ${result.embeddedChunks} 个切片，可用于知识库问答。`
+      }
+    } catch (e) {
+      if (selectedId.value === baseId) fail(e)
+    } finally {
+      embeddingIds.value.delete(doc.id)
+    }
+  }
   let uploadController: AbortController | undefined
   let listController: AbortController | undefined
   let previewController: AbortController | undefined
@@ -513,7 +535,11 @@
                         </span>
                       </div>
                     </td>
-                    <td><span class="status">已切片</span></td>
+                    <td>
+                      <span class="status" role="status">
+                        {{ embeddingIds.has(doc.id) ? '向量化中…' : doc.embeddedChunks === doc.chunkCount ? '已向量化' : '已切片' }}
+                      </span>
+                    </td>
                     <td>{{ doc.chunkCount }}</td>
                     <td>
                       {{
@@ -528,8 +554,15 @@
                           查看切片
                         </button>
                         <button
+                          :disabled="uploading || deleteBusy || embeddingIds.has(doc.id) || doc.embeddedChunks === doc.chunkCount"
+                          :aria-label="`向量化 ${doc.name}`"
+                          @click="vectorize(doc)"
+                        >
+                          {{ embeddingIds.has(doc.id) ? '向量化中…' : doc.embeddedChunks === doc.chunkCount ? '已向量化' : '向量化' }}
+                        </button>
+                        <button
                           class="delete-action"
-                          :disabled="uploading || deleteBusy"
+                          :disabled="uploading || deleteBusy || embeddingIds.has(doc.id)"
                           :aria-label="`删除 ${doc.name}`"
                           @click="deleting = doc"
                         >
