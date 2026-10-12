@@ -679,6 +679,10 @@
           </div>
         </div>
         <div class="header-actions">
+          <RouterLink to="/knowledge" class="export-button knowledge-link">
+            <Icon icon="hugeicons:book-open-01" />
+            <span>知识库</span>
+          </RouterLink>
           <span class="text-mode">文本会话</span>
           <button
             class="export-button"
@@ -1256,6 +1260,10 @@
     border: 0;
     border-radius: 8px;
     font-size: 12px !important;
+  }
+  .knowledge-link {
+    color: var(--chat-muted);
+    text-decoration: none;
   }
   .export-button:hover {
     background: var(--chat-hover);

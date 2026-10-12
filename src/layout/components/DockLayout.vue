@@ -75,13 +75,16 @@
         </DockIcon>
         <DockSeparator style="margin: 0 4px" />
         <DockIcon class="flex justify-center" style="margin: 0 8px">
-          <button type="button" class="dock-action" aria-label="切换主题" @click="changeTheme">
+          <button
+            type="button"
+            class="dock-action"
+            :aria-label="theme === 'dark' ? '切换浅色主题' : '切换深色主题'"
+            @click="changeTheme"
+          >
             <Icon
-              icon="mynaui:sun"
-              class="size-6 text-black dark:text-white"
-              v-if="theme == 'light'"
+              :icon="theme === 'dark' ? 'hugeicons:sun-03' : 'hugeicons:moon-02'"
+              class="size-6"
             />
-            <Icon icon="material-symbols:dark-mode" class="size-6" v-else />
           </button>
         </DockIcon>
 
@@ -216,11 +219,7 @@
   }
 
   const changeTheme = () => {
-    if (store.theme == 'light') {
-      store.setTheme('dark')
-    } else {
-      store.setTheme('light')
-    }
+    store.theme = store.theme === 'dark' ? 'light' : 'dark'
   }
 
   const jumpRoute = path => {

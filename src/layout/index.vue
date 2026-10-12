@@ -24,6 +24,6 @@
 
   const store = useGlobalStore()
   const route = useRoute()
-  const isChat = computed(() => route.path === '/chat')
+  const isChat = computed(() => ['/chat', '/knowledge'].includes(route.path))
   const theme = computed(() => store.theme)
 </script>

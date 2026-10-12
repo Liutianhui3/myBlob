@@ -30,6 +30,11 @@ export const constantRoutes: any = [
         meta: { title: 'AI 工作台' }
       },
       {
+        path: '/knowledge',
+        component: () => import('@/views/knowledge/index.vue'),
+        meta: { title: '知识库' }
+      },
+      {
         path: '/profile',
         component: () => import('@/views/profile/index.vue'),
         meta: { title: '个人资料' }
