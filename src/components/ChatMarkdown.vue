@@ -2,6 +2,8 @@
   import { computed } from 'vue'
   import MarkdownIt from 'markdown-it'
   import hljs from 'highlight.js/lib/common'
+  import ChatDiagram from './ChatDiagram.vue'
+  import { parseDiagram, type ChatDiagram as Diagram } from '@/lib/diagram'
 
   const props = defineProps<{ content: string }>()
   const md = new MarkdownIt({
@@ -27,7 +29,32 @@
     const language = md.utils.escapeHtml(tokens[index].info.trim().split(/\s+/)[0] || 'Text')
     return `<section class="code-block"><div class="code-title"><span>${language}</span><button type="button" data-copy-code aria-label="复制代码">复制代码</button></div>${fence(tokens, index, options, env, renderer)}</section>`
   }
-  const rendered = computed(() => md.render(props.content))
+  const rendered = computed(() => {
+    const tokens = md.parse(props.content, {})
+    const parts: { html?: string; diagram?: Diagram }[] = []
+    let start = 0
+    for (let index = 0; index < tokens.length; index++) {
+      const token = tokens[index]
+      if (token.type !== 'fence' || token.level !== 0 || token.info.trim() !== 'diagram') continue
+      // MarkdownIt also parses unclosed fences; wait for the closing line during streaming.
+      const lines = props.content.split('\n')
+      const lastLine = token.map ? lines[token.map[1] - 1]?.trim() : ''
+      if (
+        !lastLine ||
+        !new RegExp(`^${token.markup[0]}{${token.markup.length},}\\s*$`).test(lastLine)
+      )
+        continue
+      const diagram = parseDiagram(token.content)
+      if (!diagram) continue
+      if (index > start)
+        parts.push({ html: md.renderer.render(tokens.slice(start, index), md.options, {}) })
+      parts.push({ diagram })
+      start = index + 1
+    }
+    if (start < tokens.length)
+      parts.push({ html: md.renderer.render(tokens.slice(start), md.options, {}) })
+    return parts
+  })
   async function copyCode(event: MouseEvent) {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-copy-code]')
     if (!button) return
@@ -46,7 +73,12 @@
 </script>
 
 <template>
-  <div class="chat-markdown" v-html="rendered" @click="copyCode" />
+  <div class="chat-markdown" @click="copyCode">
+    <template v-for="(part, index) in rendered" :key="index">
+      <ChatDiagram v-if="part.diagram" :diagram="part.diagram" />
+      <div v-else v-html="part.html" />
+    </template>
+  </div>
 </template>
 
 <style scoped>

@@ -22,7 +22,22 @@ export const constantRoutes: any = [
       {
         path: '/article',
         component: Article,
-        meta: { title: '文章' }
+        meta: { title: '文章', public: true }
+      },
+      {
+        path: '/article/:id',
+        component: () => import('@/views/article/detail.vue'),
+        meta: { title: '阅读文章', public: true }
+      },
+      {
+        path: '/articleManage',
+        component: () => import('@/views/articleManage/index.vue'),
+        meta: { title: '文章管理', admin: true }
+      },
+      {
+        path: '/roleManage',
+        component: () => import('@/views/roleManage/index.vue'),
+        meta: { title: '角色管理', admin: true }
       },
       {
         path: '/chat',

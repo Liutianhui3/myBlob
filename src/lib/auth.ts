@@ -26,6 +26,7 @@ function publicUserInfo(value: unknown): CurrentUser | null {
     name: user.name,
     email: user.email
   }
+  if (typeof user.isAdmin === 'boolean') result.isAdmin = user.isAdmin
   for (const key of [
     'location',
     'website',

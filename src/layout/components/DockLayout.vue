@@ -32,7 +32,7 @@
             <Icon :icon="homeIcon" class="size-6" />
           </button>
         </DockIcon>
-        <!-- <DockIcon class="flex justify-center" style="margin: 0 4px">
+        <DockIcon class="flex justify-center" style="margin: 0 4px">
           <button
             type="button"
             class="dock-action"
@@ -41,7 +41,7 @@
           >
             <Icon :icon="menuIcon" class="size-6" />
           </button>
-        </DockIcon> -->
+        </DockIcon>
 
         <DockIcon class="flex justify-center" style="margin: 0 4px">
           <button
@@ -53,6 +53,40 @@
             @click="jumpRoute('/chat')"
           >
             <img src="@/assets/images/claude.svg" alt="" class="size-6" />
+          </button>
+        </DockIcon>
+
+        <DockIcon
+          v-if="currentUser?.isAdmin === true"
+          class="flex justify-center"
+          style="margin: 0 4px"
+        >
+          <button
+            type="button"
+            class="dock-action"
+            aria-label="文章管理"
+            title="文章管理"
+            :aria-current="route.path === '/articleManage' ? 'page' : undefined"
+            @click="jumpRoute('/articleManage')"
+          >
+            <Icon :icon="articleManageIcon" class="size-6" />
+          </button>
+        </DockIcon>
+
+        <DockIcon
+          v-if="currentUser?.isAdmin === true"
+          class="flex justify-center"
+          style="margin: 0 4px"
+        >
+          <button
+            type="button"
+            class="dock-action"
+            aria-label="角色管理"
+            title="角色管理"
+            :aria-current="route.path === '/roleManage' ? 'page' : undefined"
+            @click="jumpRoute('/roleManage')"
+          >
+            <Icon :icon="roleManageIcon" class="size-6" />
           </button>
         </DockIcon>
 
@@ -81,10 +115,7 @@
             :aria-label="theme === 'dark' ? '切换浅色主题' : '切换深色主题'"
             @click="changeTheme"
           >
-            <Icon
-              :icon="theme === 'dark' ? 'hugeicons:sun-03' : 'hugeicons:moon-02'"
-              class="size-6"
-            />
+            <Icon :icon="theme === 'dark' ? sunIcon : moonIcon" class="size-6" />
           </button>
         </DockIcon>
 
@@ -210,8 +241,31 @@
     body: '<path fill="#514DEF" fill-rule="evenodd" d="M6 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3zm4 5a1 1 0 0 1 1-1h6a1 1 0 1 1 0 2h-6a1 1 0 0 1-1-1m0 4a1 1 0 0 1 1-1h6a1 1 0 1 1 0 2h-6a1 1 0 0 1-1-1m0 4a1 1 0 0 1 1-1h6a1 1 0 1 1 0 2h-6a1 1 0 0 1-1-1M7 7a1 1 0 0 0 0 2h.001a1 1 0 0 0 0-2zm-1 5a1 1 0 0 1 1-1h.001a1 1 0 1 1 0 2H7a1 1 0 0 1-1-1m1 3a1 1 0 1 0 0 2h.001a1 1 0 1 0 0-2z" clip-rule="evenodd" />'
   }
 
+  const articleManageIcon = {
+    width: 24,
+    height: 24,
+    body: '<rect x="3" y="2.5" width="14" height="19" rx="3" fill="#A6B3FF"/><path d="M6.5 7h7M6.5 10.5h4" stroke="white" stroke-width="1.8" stroke-linecap="round"/><path d="m11.5 16 7.6-7.6a1.8 1.8 0 0 1 2.5 2.5L14 18.5l-3.5 1z" fill="#514DEF" stroke="white" stroke-width="1.2" stroke-linejoin="round"/><path d="m17.8 9.7 2.5 2.5" stroke="white" stroke-width="1.2"/>'
+  }
+  const roleManageIcon = {
+    width: 24,
+    height: 24,
+    body: '<circle cx="9" cy="7" r="4" fill="#514DEF"/><path d="M2 19a7 7 0 0 1 14 0v1H4a2 2 0 0 1-2-2z" fill="#A6B3FF"/><circle cx="17.5" cy="8" r="3" fill="#A6B3FF"/><path d="m17.5 12 5 2v3.1c0 2.5-2.2 4.2-5 5.4-2.8-1.2-5-2.9-5-5.4V14z" fill="#514DEF" stroke="white" stroke-width="1.2" stroke-linejoin="round"/><path d="m15.4 17.2 1.5 1.5 2.9-3" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'
+  }
+
+  const moonIcon = {
+    width: 24,
+    height: 24,
+    body: '<path d="M20.9 14.2A9 9 0 0 1 9.8 3.1a9.2 9.2 0 1 0 11.1 11.1" fill="#A6B3FF"/><path d="M20.9 14.2a9 9 0 0 1-11.1-11.1" fill="none" stroke="#514DEF" stroke-width="1.8" stroke-linecap="round"/><path d="m17 2 .8 2.2L20 5l-2.2.8L17 8l-.8-2.2L14 5l2.2-.8z" fill="#514DEF"/>'
+  }
+  const sunIcon = {
+    width: 24,
+    height: 24,
+    body: '<circle cx="12" cy="12" r="5" fill="#A6B3FF"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="#514DEF" stroke-width="2" stroke-linecap="round"/><path d="M12 7a5 5 0 0 1 5 5" fill="none" stroke="#514DEF" stroke-width="1.8" stroke-linecap="round"/>'
+  }
   const logoutIcon = {
-    body: '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 14 14"><path d="M0 0h14v14H0z" fill="none" /><g fill="none" fill-rule="evenodd" clip-rule="evenodd"> <path fill="#A6B3FF" d="M1.5 0A1.5 1.5 0 0 0 0 1.5v11A1.5 1.5 0 0 0 1.5 14h7a1.5 1.5 0 0 0 1.5-1.5v-1.939a2 2 0 0 1-.734-1.311H5.75a2.25 2.25 0 0 1 0-4.5h3.516A2 2 0 0 1 10 3.439V1.5A1.5 1.5 0 0 0 8.5 0z" /> <path fill="#514DEF" d="M10.5 5a.75.75 0 0 1 1.28-.53l2 2a.75.75 0 0 1 0 1.06l-2 2A.75.75 0 0 1 10.5 9V8H5.75a1 1 0 1 1 0-2h4.75z" /></g></svg>'
+    width: 24,
+    height: 24,
+    body: '<rect x="3" y="2.5" width="14" height="19" rx="3" fill="#A6B3FF"/><path d="M14 12h7m-3-3 3 3-3 3" fill="none" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 12h11m-3-3 3 3-3 3" fill="none" stroke="#514DEF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>'
   }
 
   const openGitHub = () => {

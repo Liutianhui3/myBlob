@@ -5,6 +5,7 @@
   import { gsap } from 'gsap'
   import { saveSession } from '@/lib/auth'
   import { login, register } from '@/api/auth'
+  import { verifyHuman } from '@/lib/captcha'
 
   const route = useRoute()
   const router = useRouter()
@@ -13,6 +14,9 @@
   const errors = reactive<Record<string, string>>({})
   const showPassword = ref(false)
   const busy = ref(false)
+  const verifying = ref(false)
+  const captchaAppId = import.meta.env.VITE_TENCENT_CAPTCHA_APP_ID?.trim() || ''
+  let verificationController: AbortController | undefined
   const message = ref('')
   const success = ref(false)
   const formElement = ref<HTMLFormElement>()
@@ -26,7 +30,10 @@
   onMounted(() => {
     animationContext = gsap.context(() => {}, panel.value)
   })
-  onUnmounted(() => animationContext?.revert())
+  onUnmounted(() => {
+    verificationController?.abort()
+    animationContext?.revert()
+  })
 
   function beforeLeave() {
     if (panel.value) gsap.set(panel.value, { height: panel.value.offsetHeight, overflow: 'hidden' })
@@ -83,6 +90,7 @@
   )
 
   watch(registering, () => {
+    verificationController?.abort()
     form.password = ''
     form.confirm = ''
     message.value = ''
@@ -123,20 +131,28 @@
         success.value = true
         message.value = '注册成功，请使用新账号登录。'
       } else {
+        verificationController = new AbortController()
+        verifying.value = true
+        const proof = await verifyHuman(captchaAppId, verificationController.signal)
+        verifying.value = false
         const session = await login({
           username: form.username.trim(),
-          password: form.password
+          password: form.password,
+          ...proof
         })
         saveSession(session.token, session.user)
         form.password = ''
         const destination =
           typeof route.query.redirect === 'string' &&
-          /^\/(home|article|chat|profile)(?:[/?#]|$)/.test(route.query.redirect)
+          /^\/(home|article|articleManage|roleManage|chat|profile|knowledge)(?:[/?#]|$)/.test(
+            route.query.redirect
+          )
             ? route.query.redirect
             : '/home'
         await router.replace(destination)
       }
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return
       message.value =
         error instanceof TypeError
           ? '暂时无法连接服务，请稍后重试。'
@@ -146,6 +162,8 @@
               ? error.message
               : '操作失败，请重试。'
     } finally {
+      verifying.value = false
+      verificationController = undefined
       busy.value = false
     }
   }
@@ -355,9 +373,15 @@
                   </div>
                   <p id="confirm-hint" class="field-error">{{ errors.confirm }}</p>
                 </div>
+                <!-- <div v-if="!registering" class="human-verification" aria-live="polite">
+                  <Icon icon="lucide:shield-check" />
+                  <span>{{ verifying ? '请在弹窗中完成真人验证' : '登录前将进行安全验证' }}</span>
+                </div> -->
                 <button class="submit-button" type="submit" :disabled="busy">
                   <Icon v-if="busy" icon="lucide:loader-circle" class="spinner" />
-                  {{ busy ? '正在处理…' : registering ? '创建账号' : '登录' }}
+                  {{
+                    verifying ? '正在验证…' : busy ? '正在处理…' : registering ? '创建账号' : '登录'
+                  }}
                   <Icon v-if="!busy" icon="lucide:arrow-right" />
                 </button>
               </fieldset>
@@ -389,6 +413,18 @@
 </template>
 
 <style scoped>
+  .human-verification {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #f7f7fb;
+    color: var(--secondary);
+    font-size: 13px;
+  }
   .auth-page {
     --ink: #242337;
     --secondary: #6c6b7f;

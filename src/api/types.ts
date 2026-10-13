@@ -8,6 +8,7 @@ export interface WorkExperience {
 }
 
 export interface CurrentUser {
+  isAdmin?: boolean
   id: string
   username: string | null
   name: string

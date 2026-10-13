@@ -8,10 +8,13 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AnimatedTestimonials: typeof import('./src/components/AnimatedTestimonials.vue')['default']
+    ArticleContent: typeof import('./src/components/ArticleContent.vue')['default']
+    ArticleEditor: typeof import('./src/components/ArticleEditor.vue')['default']
     BentoGrid: typeof import('./src/components/BentoGrid/BentoGrid.vue')['default']
     BentoGridCard: typeof import('./src/components/BentoGrid/BentoGridCard.vue')['default']
     BentoGridItem: typeof import('./src/components/BentoGrid/BentoGridItem.vue')['default']
     BlurReveal: typeof import('./src/components/BlurReveal.vue')['default']
+    ChatDiagram: typeof import('./src/components/ChatDiagram.vue')['default']
     ChatMarkdown: typeof import('./src/components/ChatMarkdown.vue')['default']
     ChatModelSettings: typeof import('./src/components/ChatModelSettings.vue')['default']
     ContainerScroll: typeof import('./src/components/ContainerScroll/ContainerScroll.vue')['default']
