@@ -141,7 +141,8 @@
             aria-label="退出系统"
             :title="currentUser?.username ? `${currentUser.username} · 退出系统` : '退出系统'"
             class="dock-action"
-            @click="logout"
+            ref="logoutButtonRef"
+            @click="requestLogout"
           >
             <Icon :icon="logoutIcon" class="size-6" />
           </button>
@@ -149,6 +150,36 @@
       </Dock>
     </nav>
   </div>
+  <Teleport to="body">
+    <dialog
+      ref="logoutDialogRef"
+      class="logout-dialog"
+      :class="{ 'is-dark': theme === 'dark' }"
+      aria-labelledby="logout-dialog-title"
+      aria-describedby="logout-dialog-description"
+      @cancel="cancelLogout"
+      @close="restoreLogoutFocus"
+      @click="dismissLogoutBackdrop"
+    >
+      <div class="logout-dialog-icon"><Icon :icon="logoutIcon" /></div>
+      <h2 id="logout-dialog-title">确认退出系统？</h2>
+      <p id="logout-dialog-description">退出后需要重新登录才能继续使用你的账户。</p>
+      <div class="logout-dialog-actions">
+        <button
+          type="button"
+          class="logout-cancel"
+          autofocus
+          :disabled="loggingOut"
+          @click="cancelLogout"
+        >
+          取消
+        </button>
+        <button type="button" class="logout-confirm" :disabled="loggingOut" @click="logout">
+          {{ loggingOut ? '正在退出…' : '确认退出' }}
+        </button>
+      </div>
+    </dialog>
+  </Teleport>
 </template>
 <script setup>
   import Dock from '@/components/Dock/Dock.vue'
@@ -166,9 +197,38 @@
 
   const dockRef = ref()
   const loggingOut = ref(false)
+  const logoutDialogRef = ref(null)
+  const logoutButtonRef = ref(null)
+  const requestLogout = () => {
+    if (loggingOut.value || logoutDialogRef.value?.open) return
+    cancelHide()
+    logoutDialogRef.value?.showModal()
+  }
+  const cancelLogout = event => {
+    event?.preventDefault()
+    if (!loggingOut.value) logoutDialogRef.value?.close()
+  }
+  const restoreLogoutFocus = () => {
+    if (loggingOut.value) return
+    showDock()
+    nextTick(() => logoutButtonRef.value?.focus())
+  }
+  const dismissLogoutBackdrop = event => {
+    if (event.target !== logoutDialogRef.value) return
+    const bounds = logoutDialogRef.value.getBoundingClientRect()
+    if (
+      event.clientX < bounds.left ||
+      event.clientX > bounds.right ||
+      event.clientY < bounds.top ||
+      event.clientY > bounds.bottom
+    )
+      cancelLogout(event)
+  }
   const logout = async () => {
+    if (loggingOut.value) return
     loggingOut.value = true
     try {
+      logoutDialogRef.value?.close()
       const revocation = signOut()
       await router.replace('/login')
       await revocation
@@ -201,6 +261,7 @@
 
   const scheduleHide = () => {
     cancelHide()
+    if (logoutDialogRef.value?.open) return
     hideTimer = window.setTimeout(() => {
       // Keep keyboard navigation available until focus leaves the Dock.
       const activeElement = document.activeElement
@@ -417,5 +478,129 @@
     .dock-panel {
       transition: none;
     }
+  }
+  .logout-dialog {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    width: min(400px, calc(100vw - 40px));
+    padding: 32px;
+    border: 1px solid #eeedf7;
+    border-radius: 24px;
+    background: #fff;
+    color: #272638;
+    box-shadow: 0 24px 80px #211a5326;
+    text-align: center;
+  }
+  .logout-dialog::backdrop {
+    background: #17132f55;
+    backdrop-filter: blur(6px);
+  }
+  .logout-dialog[open] {
+    animation: logout-dialog-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .logout-dialog[open]::backdrop {
+    animation: logout-backdrop-enter 220ms ease-out both;
+  }
+  @keyframes logout-dialog-enter {
+    from {
+      opacity: 0;
+      transform: translateY(14px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  @keyframes logout-backdrop-enter {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .logout-dialog[open],
+    .logout-dialog[open]::backdrop {
+      animation: none;
+    }
+  }
+  .logout-dialog-icon {
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    border-radius: 20px;
+    background: #f1f0ff;
+  }
+  .logout-dialog-icon svg {
+    width: 32px;
+    height: 32px;
+  }
+  .logout-dialog h2 {
+    font-size: 21px;
+    font-weight: 650;
+    margin: 0 0 12px;
+  }
+  .logout-dialog p {
+    font-size: 14px;
+    line-height: 1.7;
+    color: #78758a;
+    margin: 0;
+  }
+  .logout-dialog-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 28px;
+  }
+  .logout-dialog-actions button {
+    flex: 1;
+    padding: 12px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .logout-cancel {
+    background: #f6f5fa;
+    border: 1px solid #eae8f2;
+    color: #5d596f;
+  }
+  .logout-confirm {
+    background: #514def;
+    border: 1px solid #514def;
+    color: white;
+  }
+  .logout-cancel:hover {
+    background: #eeedf7;
+  }
+  .logout-confirm:hover {
+    background: #4540d9;
+  }
+  .logout-dialog-actions button:focus-visible {
+    outline: 2px solid #8b85ff;
+    outline-offset: 3px;
+  }
+  .logout-dialog-actions button:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+  .logout-dialog.is-dark {
+    background: #22212c;
+    border-color: #393644;
+    color: #f1efff;
+  }
+  .logout-dialog.is-dark .logout-dialog-icon {
+    background: #35304e;
+  }
+  .logout-dialog.is-dark p {
+    color: #b5afc6;
+  }
+  .logout-dialog.is-dark .logout-cancel {
+    background: #302d3c;
+    border-color: #454052;
+    color: #ddd8eb;
   }
 </style>
