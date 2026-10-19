@@ -1,0 +1,78 @@
+name: Deploy Frontend
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install and build
+        run: |
+          npm ci
+          npm run build
+          test -s dist/index.html
+          tar -czf "$RUNNER_TEMP/frontend.tar.gz" -C dist .
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          test -n "$DEPLOY_SSH_KEY"
+          test -n "$DEPLOY_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+
+      - name: Upload and publish
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]
+          [[ "$DEPLOY_USER" =~ ^[a-zA-Z0-9_-]+$ ]]
+          [[ "$DEPLOY_PORT" =~ ^[0-9]+$ ]]
+          remote_archive="/tmp/myblob-web-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes -P "$DEPLOY_PORT" \
+            "$RUNNER_TEMP/frontend.tar.gz" "$DEPLOY_USER@$DEPLOY_HOST:$remote_archive"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -p "$DEPLOY_PORT" \
+            "$DEPLOY_USER@$DEPLOY_HOST" bash -s -- "$remote_archive" <<'REMOTE'
+          set -euo pipefail
+          archive="$1"
+          staging=$(mktemp -d /tmp/myblob-web.XXXXXX)
+          trap 'rm -rf -- "$staging"; rm -f -- "$archive"' EXIT
+          tar -xzf "$archive" -C "$staging"
+          test -s "$staging/index.html"
+          test -d /var/www/myblob
+          # Retain old hashed assets so existing browser sessions can finish loading.
+          rsync -a --exclude=/index.html "$staging/" /var/www/myblob/
+          chmod -R a+rX /var/www/myblob
+          install -m 644 "$staging/index.html" /var/www/myblob/.index.html.next
+          mv -f /var/www/myblob/.index.html.next /var/www/myblob/index.html
+          REMOTE
+
+      - name: Remove private key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519
