@@ -3,9 +3,12 @@
   import MarkdownIt from 'markdown-it'
   import hljs from 'highlight.js/lib/common'
   import ChatDiagram from './ChatDiagram.vue'
+  import ChatSpreadsheet from './ChatSpreadsheet.vue'
+  import ChatImageAttachment from './ChatImageAttachment.vue'
+  import { parseSpreadsheet, type SpreadsheetFile } from '@/lib/spreadsheet'
   import { parseDiagram, type ChatDiagram as Diagram } from '@/lib/diagram'
 
-  const props = defineProps<{ content: string }>()
+  const props = defineProps<{ content: string; conversationId?: string; messageId?: string }>()
   const md = new MarkdownIt({
     html: false,
     breaks: true,
@@ -16,6 +19,9 @@
         : md.utils.escapeHtml(code)
     }
   })
+  const validateLink = md.validateLink.bind(md)
+  md.validateLink = url =>
+    /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(url) || validateLink(url)
   const defaultLink = md.renderer.rules.link_open
   md.renderer.rules.link_open = (tokens, index, options, env, renderer) => {
     tokens[index].attrSet('target', '_blank')
@@ -31,11 +37,39 @@
   }
   const rendered = computed(() => {
     const tokens = md.parse(props.content, {})
-    const parts: { html?: string; diagram?: Diagram }[] = []
+    const parts: {
+      html?: string
+      diagram?: Diagram
+      spreadsheet?: SpreadsheetFile
+      image?: { url: string; alt: string }
+    }[] = []
     let start = 0
     for (let index = 0; index < tokens.length; index++) {
       const token = tokens[index]
-      if (token.type !== 'fence' || token.level !== 0 || token.info.trim() !== 'diagram') continue
+      const children = tokens[index + 1]?.children
+      if (
+        token.type === 'paragraph_open' &&
+        children?.length === 1 &&
+        children[0].type === 'image' &&
+        tokens[index + 2]?.type === 'paragraph_close'
+      ) {
+        const image = children[0]
+        const url = image.attrGet('src') || ''
+        if (/^https?:\/\//i.test(url) || /^data:image\/(png|jpeg|webp);base64,/.test(url)) {
+          if (index > start)
+            parts.push({ html: md.renderer.render(tokens.slice(start, index), md.options, {}) })
+          parts.push({ image: { url, alt: image.content || 'AI 生成的图片' } })
+          index += 2
+          start = index + 1
+          continue
+        }
+      }
+      if (
+        token.type !== 'fence' ||
+        token.level !== 0 ||
+        !['diagram', 'xlsx'].includes(token.info.trim())
+      )
+        continue
       // MarkdownIt also parses unclosed fences; wait for the closing line during streaming.
       const lines = props.content.split('\n')
       const lastLine = token.map ? lines[token.map[1] - 1]?.trim() : ''
@@ -44,11 +78,12 @@
         !new RegExp(`^${token.markup[0]}{${token.markup.length},}\\s*$`).test(lastLine)
       )
         continue
-      const diagram = parseDiagram(token.content)
-      if (!diagram) continue
+      const diagram = token.info.trim() === 'diagram' ? parseDiagram(token.content) : null
+      const spreadsheet = token.info.trim() === 'xlsx' ? parseSpreadsheet(token.content) : null
+      if (!diagram && !spreadsheet) continue
       if (index > start)
         parts.push({ html: md.renderer.render(tokens.slice(start, index), md.options, {}) })
-      parts.push({ diagram })
+      parts.push(diagram ? { diagram } : { spreadsheet: spreadsheet! })
       start = index + 1
     }
     if (start < tokens.length)
@@ -76,6 +111,14 @@
   <div class="chat-markdown" @click="copyCode">
     <template v-for="(part, index) in rendered" :key="index">
       <ChatDiagram v-if="part.diagram" :diagram="part.diagram" />
+      <ChatSpreadsheet v-else-if="part.spreadsheet" :file="part.spreadsheet" />
+      <ChatImageAttachment
+        v-else-if="part.image"
+        generated
+        :conversation-id="conversationId"
+        :message-id="messageId"
+        :attachment="{ type: 'image', mime: '', name: part.image.alt, data: part.image.url }"
+      />
       <div v-else v-html="part.html" />
     </template>
   </div>

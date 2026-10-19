@@ -7,6 +7,8 @@
   import { ScrollToPlugin } from 'gsap/ScrollToPlugin'
   import icons from '@/assets/chat-icons.json'
   import ChatMarkdown from '@/components/ChatMarkdown.vue'
+  import ChatImageAttachment from '@/components/ChatImageAttachment.vue'
+  import ChatImageGenerating from '@/components/ChatImageGenerating.vue'
   import ChatModelSettings from '@/components/ChatModelSettings.vue'
   import UserAvatar from '@/components/UserAvatar.vue'
   import { userInfo, userDisplayName as userName } from '@/lib/auth'
@@ -14,6 +16,7 @@
   import { useGlobalStore } from '@/store'
   import {
     deleteConversation,
+    extractChatDocument,
     ChatError,
     createConversation,
     getMessages,
@@ -69,6 +72,7 @@
     }
   }
   const messages = ref<ChatMessage[]>([])
+  const imageGeneratingId = ref('')
   const draft = ref('')
   const attachments = ref<ChatAttachment[]>([])
   const attachmentInput = ref<HTMLInputElement>()
@@ -171,7 +175,13 @@
           const text = new TextDecoder('utf-8', { fatal: true }).decode(await file.arrayBuffer())
           if (!text.trim() || text.includes('\0')) throw new Error('请选择非空的 UTF-8 文本文档。')
           additions.push({ name: file.name, type: 'document', mime: 'text/plain', text })
-        } else throw new Error('支持 PNG、JPEG、WebP 图片和 TXT、Markdown 文档。')
+        } else if (/\.(docx|xlsx|pdf|pptx)$/i.test(file.name)) {
+          if (!file.size || file.size > 10 * 1024 * 1024) throw new Error('单个文件最大 10 MB。')
+          additions.push({ ...(await extractChatDocument(file)), name: file.name })
+        } else
+          throw new Error(
+            '支持 PNG、JPEG、WebP、TXT、Markdown、DOCX、XLSX、PDF、PPTX；旧版 DOC/XLS/PPT 请另存为新版格式。'
+          )
       }
       const combined = [...attachments.value, ...additions]
       const bytes = combined.reduce(
@@ -589,10 +599,16 @@
             if (payload.reasoningEffort) reply!.reasoningEffort = payload.reasoningEffort
           },
           onDelta(text) {
+            imageGeneratingId.value = ''
             reply!.content += text
             void scrollBottom()
           },
+          onImageGeneration() {
+            imageGeneratingId.value = reply!.id
+            void nextTick(() => scrollBottom())
+          },
           onDone(payload) {
+            imageGeneratingId.value = ''
             reply!.status = 'completed'
             if (payload.finishReason === 'length')
               showNotice('回复达到长度上限，可发送「继续」接着生成。')
@@ -632,6 +648,7 @@
         } else draft.value = content
       }
     } finally {
+      imageGeneratingId.value = ''
       if (generation === controller) {
         generation = undefined
         busy.value = false
@@ -983,34 +1000,46 @@
             :class="message.role"
             :aria-label="message.role === 'user' ? '你的消息' : 'AI 回复'"
           >
-            <div v-if="message.role === 'user'" class="user-bubble">
-              <div v-if="message.attachments?.length" class="attachment-list">
-                <div
-                  v-for="(attachment, index) in message.attachments"
-                  :key="index"
-                  class="attachment-card"
-                >
-                  <img
+            <div v-if="message.role === 'user'" class="user-content">
+              <div v-if="message.attachments?.length" class="attachment-list sent-attachments">
+                <template v-for="(attachment, index) in message.attachments" :key="index">
+                  <ChatImageAttachment
                     v-if="attachment.type === 'image'"
-                    :src="attachment.data"
-                    :alt="attachment.name"
+                    :attachment="attachment"
                   />
-                  <span v-else aria-hidden="true">▤</span>
-                  <span>{{ attachment.name }}</span>
-                </div>
+                  <div v-else class="attachment-card">
+                    <span aria-hidden="true">▤</span>
+                    <span>{{ attachment.name }}</span>
+                  </div>
+                </template>
               </div>
-              {{ message.content }}
+              <div v-if="message.content" class="user-bubble">{{ message.content }}</div>
             </div>
             <template v-else>
               <div class="assistant-label">
                 <img src="@/assets/images/claude.svg" alt="" />
                 <span>AI 助手</span>
-                <span v-if="message.status === 'generating' && busy" class="generation-label">
+                <span
+                  v-if="message.status === 'generating' && busy && imageGeneratingId !== message.id"
+                  class="generation-label"
+                >
                   正在生成
                 </span>
               </div>
-              <ChatMarkdown v-if="message.content" :content="message.content" />
-              <p v-else-if="message.status === 'generating'" class="thinking" role="status">
+              <ChatMarkdown
+                v-if="message.content"
+                :content="message.content"
+                :conversation-id="activeId"
+                :message-id="message.id"
+              />
+              <ChatImageGenerating
+                v-if="imageGeneratingId === message.id && message.status === 'generating' && busy"
+              />
+              <p
+                v-else-if="!message.content && message.status === 'generating'"
+                class="thinking"
+                role="status"
+              >
                 <span class="loading-dot" />
                 {{ busy ? '正在思考…' : '回复正在生成，稍后重新加载可查看状态。' }}
               </p>
@@ -1096,27 +1125,28 @@
                   <span class="attachment-spinner" aria-hidden="true" />
                   <span>正在读取附件…</span>
                 </div>
-                <div
-                  v-for="(attachment, index) in attachments"
-                  :key="index"
-                  class="attachment-card attachment-reveal"
-                >
-                  <img
+                <template v-for="(attachment, index) in attachments" :key="index">
+                  <ChatImageAttachment
                     v-if="attachment.type === 'image'"
-                    :src="attachment.data"
-                    :alt="attachment.name"
-                  />
-                  <span v-else aria-hidden="true">▤</span>
-                  <span>{{ attachment.name }}</span>
-                  <button
-                    type="button"
-                    :aria-label="`移除 ${attachment.name}`"
+                    class="attachment-reveal"
+                    :attachment="attachment"
+                    removable
                     :disabled="busy"
-                    @click="attachments.splice(index, 1)"
-                  >
-                    ×
-                  </button>
-                </div>
+                    @remove="attachments.splice(index, 1)"
+                  />
+                  <div v-else class="attachment-card attachment-reveal">
+                    <span aria-hidden="true">▤</span>
+                    <span>{{ attachment.name }}</span>
+                    <button
+                      type="button"
+                      :aria-label="`移除 ${attachment.name}`"
+                      :disabled="busy"
+                      @click="attachments.splice(index, 1)"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </template>
               </div>
             </div>
           </Transition>
@@ -1134,7 +1164,7 @@
             <input
               ref="attachmentInput"
               type="file"
-              accept="image/png,image/jpeg,image/webp,.txt,.md"
+              accept="image/png,image/jpeg,image/webp,.txt,.md,.docx,.xlsx,.pdf,.pptx"
               multiple
               hidden
               @change="addAttachments"
@@ -1143,7 +1173,7 @@
               type="button"
               class="icon-button attach-button"
               aria-label="上传图片或文档"
-              title="图片 PNG/JPEG/WebP ≤2MB；文档 TXT/MD ≤100KB；最多4个"
+              title="图片 ≤2MB；DOCX/XLSX/PDF/PPTX ≤10MB；TXT/MD ≤100KB；最多4个"
               :disabled="busy || historyLoading || readingAttachments || attachments.length >= 4"
               @click="attachmentInput?.click()"
             >
@@ -1246,7 +1276,7 @@
                 : '请等待当前操作完成，或移除附件后再添加'
             }}
           </p>
-          <small>PNG / JPEG / WebP · TXT / Markdown · 最多 4 个附件</small>
+          <small>图片 · TXT / Markdown / Word / Excel / PDF / PPTX · 最多 4 个附件</small>
         </div>
       </div>
     </Transition>
@@ -1374,7 +1404,7 @@
     margin-bottom: 10px;
   }
   .draft-attachments {
-    padding: 4px 0;
+    padding: 8px 6px 4px 0;
   }
   .attachment-card {
     display: flex;
@@ -2078,6 +2108,15 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     max-width: 100%;
+  }
+  .user-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    max-width: 100%;
+  }
+  .sent-attachments {
+    justify-content: flex-end;
   }
   .assistant-label {
     display: flex;

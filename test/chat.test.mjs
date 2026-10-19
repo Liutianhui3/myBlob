@@ -26,6 +26,27 @@ function sseResponse(text, chunkSize = 1) {
   )
 }
 
+test('image generation event notifies UI without adding status text to message content', async () => {
+  const wire =
+    'event: image_generation\ndata: {"status":"generating"}\n\nevent: delta\ndata: {"text":"image result"}\n\nevent: done\ndata: {"messageId":"reply"}\n\n'
+  const { api } = client(sseResponse(wire))
+  const events = []
+  await api.streamMessage('conversation', 'draw', {
+    signal: new AbortController().signal,
+    onStart() {},
+    onImageGeneration() {
+      events.push('image-generating')
+    },
+    onDelta(text) {
+      events.push(text)
+    },
+    onDone() {
+      events.push('done')
+    }
+  })
+  assert.deepEqual(events, ['image-generating', 'image result', 'done'])
+})
+
 const callbacks = overrides => ({
   signal: new AbortController().signal,
   onStart() {},

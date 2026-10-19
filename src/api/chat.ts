@@ -29,6 +29,30 @@ export interface ChatMessage {
   reasoningEffort?: string | null
 }
 
+export async function extractChatDocument(file: File): Promise<ChatAttachment> {
+  const data = new FormData()
+  data.append('file', file)
+  return withChatErrors(() =>
+    request<ChatAttachment>({
+      url: '/conversations/attachments/extract',
+      method: 'POST',
+      data,
+      timeout: 120000
+    })
+  )
+}
+
+export const downloadChatImage = (conversationId: string, messageId: string, url: string) =>
+  withChatErrors(() =>
+    request<Blob>({
+      url: `/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/images/download`,
+      method: 'POST',
+      data: { url },
+      responseType: 'blob',
+      timeout: 65000
+    })
+  )
+
 export interface GenerationOptions {
   model: string
   reasoningEffort: string
@@ -101,6 +125,7 @@ export interface StreamCallbacks {
     reasoningEffort?: string
   }) => void
   onDelta: (text: string) => void
+  onImageGeneration?: () => void
   onDone: (payload: { messageId: string; finishReason?: string }) => void
 }
 
@@ -155,6 +180,8 @@ export async function streamMessage(
               throw new ChatError('回复数据异常，请重新加载会话。')
             }
             if (event === 'start') callbacks.onStart(payload)
+            if (event === 'image_generation' && payload.status === 'generating')
+              callbacks.onImageGeneration?.()
             if (event === 'delta') {
               if (typeof payload.text !== 'string') throw new ChatError('回复数据异常。')
               callbacks.onDelta(payload.text)
