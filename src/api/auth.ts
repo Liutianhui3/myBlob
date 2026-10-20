@@ -1,6 +1,5 @@
 import request from '../utils/request'
 import type { CurrentUser } from './types'
-import type { CaptchaProof } from '../lib/captcha'
 
 export interface LoginPayload {
   username: string
@@ -16,7 +15,7 @@ export interface LoginResult {
   user: CurrentUser
 }
 
-export const login = (data: LoginPayload & Partial<CaptchaProof>) =>
+export const login = (data: LoginPayload) =>
   request<LoginResult>({ url: '/users/login', method: 'POST', data, authenticated: false })
 
 export const register = (data: RegisterPayload) =>
