@@ -7,7 +7,14 @@ export interface WorkExperience {
   description: string
 }
 
+export interface UserRole {
+  id: string | number
+  name?: string
+  nameCn?: string
+}
+
 export interface CurrentUser {
+  roles?: UserRole[]
   isAdmin?: boolean
   id: string
   username: string | null

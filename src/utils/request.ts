@@ -5,23 +5,30 @@ import { message as showMessage } from './message'
 
 // 防止重复触发登出
 let isHandlingExpired = false
+let invalidateSession: (() => void) | undefined
+export function onSessionInvalidated(handler: () => void) {
+  invalidateSession = handler
+}
 
-function handleTokenExpired() {
+function handleTokenExpired(reason = '登录已过期，请重新登录') {
   if (isHandlingExpired) return
   isHandlingExpired = true
 
   // 清除 token
   removeToken()
+  sessionStorage.removeItem('userInfo')
+  invalidateSession?.()
 
   // 显示友好的提示消息
-  showMessage.warning('登录已过期，请重新登录', 3000)
+  showMessage.warning(reason, 3000)
 
   // 延迟跳转，让用户看到提示
   setTimeout(() => {
     const currentPath = window.location.pathname
-    const redirectQuery = currentPath !== '/login' && currentPath !== '/register'
-      ? `?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`
-      : ''
+    const redirectQuery =
+      currentPath !== '/login' && currentPath !== '/register'
+        ? `?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`
+        : ''
 
     window.location.href = `/login${redirectQuery}`
 
@@ -34,6 +41,8 @@ function handleTokenExpired() {
 
 export interface RequestConfig extends AxiosRequestConfig {
   authenticated?: boolean
+  /** Disable the global error toast when a caller provides its own feedback. */
+  silent?: boolean
 }
 
 export class RequestError extends Error {
@@ -80,9 +89,17 @@ client.interceptors.response.use(
   async error => {
     if (axios.isCancel(error)) throw new DOMException('请求已取消。', 'AbortError')
     if (!axios.isAxiosError(error)) throw error
-    if (['ETIMEDOUT', 'ECONNABORTED'].includes(error.code || ''))
+    const notify = (text: string) => {
+      if (!(error.config as RequestConfig | undefined)?.silent) showMessage.error(text)
+    }
+    if (['ETIMEDOUT', 'ECONNABORTED'].includes(error.code || '')) {
+      notify('请求超时，请稍后重试。')
       throw new DOMException('请求超时，请稍后重试。', 'TimeoutError')
-    if (!error.response) throw new TypeError('暂时无法连接服务，请检查网络后重试。')
+    }
+    if (!error.response) {
+      notify('暂时无法连接服务，请检查网络后重试。')
+      throw new TypeError('暂时无法连接服务，请检查网络后重试。')
+    }
 
     const status = error.response.status
     let data = error.response.data
@@ -92,12 +109,14 @@ client.interceptors.response.use(
     }
 
     // 处理 401 未授权错误
-    if (status === 401) {
-      handleTokenExpired()
+    const requestToken = error.config?.headers?.get('Authorization')
+    const ownsSession = requestToken && requestToken === `Bearer ${getToken()}`
+    if ((status === 401 || status === 403) && ownsSession) {
+      handleTokenExpired(status === 403 ? '无权限访问，已退出登录' : undefined)
     }
 
     const message = Array.isArray(data?.message) ? data.message.join('，') : data?.message
-    throw new RequestError(
+    const requestError = new RequestError(
       status === 401
         ? '登录已过期，请重新登录。'
         : typeof message === 'string' && message
@@ -105,6 +124,8 @@ client.interceptors.response.use(
           : `请求失败（${status}），请稍后重试。`,
       status
     )
+    if (status !== 401 && status !== 403) notify(requestError.message)
+    throw requestError
   }
 )
 

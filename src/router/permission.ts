@@ -1,5 +1,6 @@
 import NProgress from 'nprogress' // progress bar
 import type { Router } from 'vue-router'
+import { canAccessPage } from '../config/access'
 import { checkSession } from '@/lib/auth'
 
 export const createRouterGuard = function (router: Router) {
@@ -8,10 +9,12 @@ export const createRouterGuard = function (router: Router) {
     NProgress.start() //开启进度条
     const authPage = ['/login', '/register'].includes(to.path)
     const publicPage = authPage || to.meta.public === true
-    const user = await checkSession()
+    // The homepage displays editable profile data, so fetch the latest on every entry.
+    const user = await checkSession({ refresh: to.path === '/home' })
     if (!publicPage && !user)
       return { path: '/login', query: { redirect: to.fullPath }, replace: true }
-    if (to.meta.admin === true && user?.isAdmin !== true) return { path: '/article', replace: true }
+    if (to.meta.permission && !canAccessPage(user, to.meta.permission))
+      return { path: '/article', replace: true }
     if (authPage && user) return { path: '/home', replace: true }
     document.title = to.meta.title ? `${to.meta.title} | 个人博客` : '个人博客'
     return true

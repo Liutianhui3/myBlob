@@ -119,3 +119,38 @@ test('stopping an active SSE stream cancels its reader and never reports complet
   // The source errored on abort; Axios still releases the consumer reader in finally.
   assert.equal(client.calls[0][1].signal.aborted, true)
 })
+
+
+test('global request feedback reports 503 and network errors, respects silent, and ignores cancellation', async () => {
+  const messages = []
+  const client = loadClient({
+    response: new Response('{"message":"服务器内部错误，请稍后重试"}', { status: 503 }),
+    modules: { 'src/utils/message.ts': { message: { error: text => messages.push(text) } } }
+  })
+  const { default: request } = client.load('src/utils/request.ts')
+  await assert.rejects(request({ url: '/me' }), error => error.status === 503)
+  assert.deepEqual(messages, ['服务器内部错误，请稍后重试'])
+  client.respond(new Response('{}', { status: 503 }))
+  await assert.rejects(request({ url: '/me', silent: true }))
+  assert.equal(messages.length, 1)
+  client.respond(new TypeError('Failed to fetch'))
+  await assert.rejects(request({ url: '/me' }))
+  assert.match(messages[1], /检查网络/)
+  const controller = new AbortController()
+  controller.abort()
+  await assert.rejects(request({ url: '/me', signal: controller.signal }))
+  assert.equal(messages.length, 2)
+})
+
+
+test('403 clears the active session and redirects to login; stale failures keep a newer login', async () => {
+  const client = loadClient({ response: new Response('{"message":"无权限访问"}', {status: 403}) })
+  const auth = client.load('src/lib/auth.ts')
+  auth.saveSession('active', {id: '1', username: 'reader', name: 'Reader', email: 'r@example.com'})
+  await assert.rejects(client.load('src/utils/request.ts').default({url: '/admin/users'}), e => e.status === 403)
+  assert.equal(auth.currentUser.value, null)
+  assert.equal(client.storage.has('myblob_token'), false)
+  assert.equal(client.session.has('userInfo'), false)
+  client.runTimers()
+  assert.match(client.location.href, /^\/login/)
+})

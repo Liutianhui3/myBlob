@@ -16,6 +16,8 @@ export function loadClient({
   modules = {}
 } = {}) {
   const calls = []
+  const timers = []
+  const location = { pathname: "/roleManage", search: "", href: "" }
   const cache = new Map()
   let responder = response
   const storageAPI = values => ({
@@ -33,6 +35,8 @@ export function loadClient({
     create: config => axios.create({ ...config, env: { ...config.env, Request: BrowserRequest } })
   }
   const globals = {
+    setTimeout: callback => { timers.push(callback); return timers.length },
+    window: { location },
     AbortSignal,
     DOMException,
     Response,
@@ -68,6 +72,7 @@ export function loadClient({
     const filename = path.resolve(root, relative)
     const key = path.relative(root, filename).replaceAll('\\', '/')
     if (modules[key]) return modules[key]
+    if (key === 'src/utils/message.ts') return { message: { error() {}, warning() {} } }
     if (cache.has(filename)) return cache.get(filename)
     const exports = {}
     cache.set(filename, exports)
@@ -96,6 +101,8 @@ export function loadClient({
   return {
     load,
     calls,
+    location,
+    runTimers: () => { while (timers.length) timers.shift()() },
     storage,
     session,
     respond: value => {

@@ -2,7 +2,7 @@ import { computed, ref } from 'vue'
 import { logout } from '../api/auth'
 import { getCurrentUser } from '../api/user'
 import type { CurrentUser, WorkExperience } from '../api/types'
-import { RequestError } from '../utils/request'
+import { RequestError, onSessionInvalidated } from '../utils/request'
 import { TOKEN_KEY, getToken, setToken, removeToken } from '../utils/token'
 
 export type { CurrentUser, WorkExperience } from '../api/types'
@@ -26,6 +26,20 @@ function publicUserInfo(value: unknown): CurrentUser | null {
     name: user.name,
     email: user.email
   }
+  result.roles = Array.isArray(user.roles)
+    ? user.roles
+        .filter(
+          role =>
+            role &&
+            (typeof role.id === 'string' ||
+              (typeof role.id === 'number' && Number.isFinite(role.id)))
+        )
+        .map(role => ({
+          id: role.id,
+          ...(typeof role.name === 'string' ? { name: role.name } : {}),
+          ...(typeof role.nameCn === 'string' ? { nameCn: role.nameCn } : {})
+        }))
+    : []
   if (typeof user.isAdmin === 'boolean') result.isAdmin = user.isAdmin
   for (const key of [
     'location',
@@ -92,33 +106,67 @@ export function setUserInfo(user: CurrentUser | null) {
   }
 }
 
+// Memory-only: a page reload must validate the stored token again.
+let checkedToken: string | null = null
+let sessionCheck: { token: string; promise: Promise<CurrentUser | null> } | null = null
+let sessionVersion = 0
+
 export function saveSession(token: string, user: CurrentUser) {
   setToken(token)
   setUserInfo(user)
+  checkedToken = token
+  sessionCheck = null
+  sessionVersion++
 }
 
 export function clearSession() {
+  checkedToken = null
+  sessionCheck = null
+  sessionVersion++
   removeToken()
   setUserInfo(null)
 }
 
-// 每次进入系统都向后端确认会话，过期或注销后不可继续进入。
-export async function checkSession() {
-  const token = localStorage.getItem(TOKEN_KEY)
+// Validate once after reload; callers can refresh server data when entering the profile homepage.
+export async function checkSession(
+  options: { refresh?: boolean } = {}
+): Promise<CurrentUser | null> {
+  const token = getToken()
   if (!token) {
-    setUserInfo(null)
+    clearSession()
     return null
   }
+  if (sessionCheck?.token === token) return sessionCheck.promise
+  if (!options.refresh && checkedToken === token) return currentUser.value
+
+  const version = ++sessionVersion
+  const promise = (async () => {
+    try {
+      const user = await getCurrentUser()
+      if (getToken() !== token || sessionVersion !== version) return null
+      setUserInfo(user)
+      checkedToken = token
+    } catch (error) {
+      if (sessionVersion !== version) return null
+      if (getToken() !== token) {
+        // The request interceptor or another tab may already have removed the token.
+        if (!getToken()) clearSession()
+        return null
+      }
+      if (error instanceof RequestError && error.status === 401) clearSession()
+      else {
+        setUserInfo(null)
+        checkedToken = token
+      }
+    }
+    return currentUser.value
+  })()
+  sessionCheck = { token, promise }
   try {
-    const user = await getCurrentUser()
-    if (localStorage.getItem(TOKEN_KEY) !== token) return null
-    setUserInfo(user)
-  } catch (error) {
-    if (localStorage.getItem(TOKEN_KEY) !== token) return null
-    if (error instanceof RequestError && error.status === 401) clearSession()
-    else setUserInfo(null)
+    return await promise
+  } finally {
+    if (sessionCheck?.promise === promise) sessionCheck = null
   }
-  return currentUser.value
 }
 
 export async function signOut() {
@@ -132,3 +180,6 @@ export async function signOut() {
     return false
   }
 }
+
+// Register without a request/auth circular import.
+onSessionInvalidated(clearSession)

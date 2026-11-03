@@ -32,12 +32,12 @@ export const constantRoutes: any = [
       {
         path: '/articleManage',
         component: () => import('@/views/articleManage/index.vue'),
-        meta: { title: '文章管理', admin: true }
+        meta: { title: '文章管理', permission: 'articleManage' }
       },
       {
         path: '/roleManage',
         component: () => import('@/views/roleManage/index.vue'),
-        meta: { title: '角色管理', admin: true }
+        meta: { title: '角色管理', permission: 'roleManage' }
       },
       {
         path: '/chat',

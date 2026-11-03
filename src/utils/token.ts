@@ -24,7 +24,7 @@ export function isTokenExpired(): boolean {
   if (!token) return true
 
   const expireTime = localStorage.getItem(TOKEN_EXPIRE_KEY)
-  if (!expireTime) return true
+  if (!expireTime) return false
 
   return Date.now() > parseInt(expireTime)
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { onMounted, onUnmounted, ref } from 'vue'
+  import { canAccessPage } from '@/config/access'
   import { currentUser } from '@/lib/auth'
   import { Icon } from '@iconify/vue'
   import BentoGrid from '@/components/BentoGrid/BentoGrid.vue'
@@ -48,7 +49,9 @@
     <p v-else-if="loading" class="bento-state" role="status">正在加载文章…</p>
     <p v-else-if="!items.length" class="bento-state">
       还没有已发布的文章。
-      <RouterLink v-if="currentUser?.isAdmin === true" to="/articleManage">去写第一篇</RouterLink>
+      <RouterLink v-if="canAccessPage(currentUser, 'articleManage')" to="/articleManage">
+        去写第一篇
+      </RouterLink>
     </p>
     <BlurReveal v-else class="bento-reveal" :key="page" :delay="0.2" :duration="0.4">
       <BentoGrid

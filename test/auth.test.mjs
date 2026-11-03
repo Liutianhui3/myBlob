@@ -22,7 +22,7 @@ function loadAuth(storage = new Map(), session = new Map()) {
   return { ...client, auth: client.load('src/lib/auth.ts') }
 }
 
-test('no token blocks entry; saved token restores user; expired token is cleared', async () => {
+test('no token blocks entry; login data is reused without another request', async () => {
   const { auth, calls, storage, respond } = loadAuth()
   assert.equal(await auth.checkSession(), null)
   assert.equal(calls.length, 0)
@@ -34,10 +34,9 @@ test('no token blocks entry; saved token restores user; expired token is cleared
   })
   assert.equal(storage.get(auth.TOKEN_KEY), 'test-token')
   assert.equal((await auth.checkSession()).username, 'reader')
-  assert.equal(calls[0][1].headers.Authorization, 'Bearer test-token')
-  respond({ status: 401, ok: false })
-  assert.equal(await auth.checkSession(), null)
-  assert.equal(storage.has(auth.TOKEN_KEY), false)
+  assert.equal(calls.length, 0)
+  assert.equal((await auth.checkSession()).username, 'reader')
+  assert.equal(calls.length, 0)
 })
 
 test('logout immediately clears local token even if backend is unavailable', async () => {
@@ -58,7 +57,7 @@ test('logout immediately clears local token even if backend is unavailable', asy
 })
 
 test('login caches public userInfo, restores it after reload and shares reactive display data', async () => {
-  const { auth, storage, session, respond } = loadAuth()
+  const { auth, storage, session } = loadAuth()
   const user = {
     id: '1',
     username: 'reader',
@@ -96,18 +95,19 @@ test('login caches public userInfo, restores it after reload and shares reactive
   assert.equal(cached.token, undefined)
   assert.equal(auth.userInfo, auth.currentUser)
   assert.equal(auth.userDisplayName.value, '真实昵称')
-  const restored = loadAuth(storage, session).auth
+  const reloaded = loadAuth(storage, session)
+  const restored = reloaded.auth
   assert.equal(restored.userInfo.value.avatar, user.avatar)
   assert.equal(restored.userInfo.value.workExperiences[0].description, '研发')
   assert.equal(restored.userInfo.value.skills[1], 'TypeScript')
   assert.equal(restored.userDisplayName.value, '真实昵称')
-  respond({
+  reloaded.respond({
     ok: true,
     status: 200,
     json: async () => ({ ...user, name: '更新后的昵称', avatar: '' })
   })
-  await auth.checkSession()
-  assert.equal(auth.userDisplayName.value, '更新后的昵称')
+  await restored.checkSession()
+  assert.equal(restored.userDisplayName.value, '更新后的昵称')
   assert.equal(JSON.parse(session.get('userInfo')).avatar, '')
   auth.setUserInfo({ ...user, name: ' ' })
   assert.equal(auth.userDisplayName.value, 'reader')
@@ -116,8 +116,9 @@ test('login caches public userInfo, restores it after reload and shares reactive
 test('expired, offline, malformed and tokenless sessions never retain stale userInfo', async () => {
   const user = { id: '1', username: 'reader', name: 'Reader', email: 'reader@example.com' }
   for (const response of [{ ok: false, status: 401 }, new TypeError('offline')]) {
-    const { auth, session, respond } = loadAuth()
-    auth.saveSession('token', user)
+    const initial = loadAuth()
+    initial.auth.saveSession('token', user)
+    const { auth, session, respond } = loadAuth(initial.storage, initial.session)
     respond(response)
     assert.equal(await auth.checkSession(), null)
     assert.equal(session.has('userInfo'), false)
@@ -135,8 +136,9 @@ test('expired, offline, malformed and tokenless sessions never retain stale user
 test('delayed session checks cannot resurrect a logged-out user or overwrite a newer login', async () => {
   const user = { id: '1', username: 'reader', name: 'Reader', email: 'reader@example.com' }
   for (const newLogin of [false, true]) {
-    const { auth, session, respond } = loadAuth()
-    auth.saveSession('old-token', user)
+    const initial = loadAuth()
+    initial.auth.saveSession('old-token', user)
+    const { auth, session, respond } = loadAuth(initial.storage, initial.session)
     let complete
     respond(
       () =>
@@ -161,9 +163,14 @@ test('route guard redirects guests and allows authenticated home', async () => {
     .replace(/^import .*$/gm, '')
   let user = null
   let beforeEach
+  const checks = []
   const context = {
     exports: {},
-    checkSession: async () => user,
+    canAccessPage: loadClient().load('src/config/access.ts').canAccessPage,
+    checkSession: async options => {
+      checks.push(options.refresh)
+      return user
+    },
     NProgress: { start() {}, done() {} },
     document: {}
   }
@@ -183,7 +190,18 @@ test('route guard redirects guests and allows authenticated home', async () => {
   assert.equal(await beforeEach({ path: '/register', meta: {} }), true)
   user = { id: '1' }
   assert.equal(await beforeEach(target), true)
+  assert.equal(checks.at(-1), true)
   assert.equal((await beforeEach({ path: '/login', meta: {} })).path, '/home')
+  assert.equal(checks.at(-1), false)
+  assert.equal(await beforeEach({ path: '/profile', meta: {} }), true)
+  assert.equal(checks.at(-1), false)
+  for (const permission of ['articleManage', 'roleManage']) {
+    const target = { path: '/' + permission, meta: { permission } }
+    user = { id: '1', isAdmin: true, roles: [{ id: 2 }] }
+    assert.equal((await beforeEach(target)).path, '/article')
+    user = { id: '1', roles: [{ id: 1 }] }
+    assert.equal(await beforeEach(target), true)
+  }
   user = null
   assert.equal(
     (await beforeEach({ path: '/article', fullPath: '/article', meta: {} })).query.redirect,

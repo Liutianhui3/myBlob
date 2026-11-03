@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import { onUnmounted, ref, watch } from 'vue'
   import { useRoute } from 'vue-router'
+  import { canAccessPage } from '@/config/access'
   import { currentUser } from '@/lib/auth'
   import { Icon } from '@iconify/vue'
   import { getArticle, articleDate, type Article } from '@/api/articles'
@@ -40,7 +41,9 @@
       </RouterLink>
       <nav class="article-navigation" aria-label="文章导航">
         <RouterLink to="/article">阅读文章</RouterLink>
-        <RouterLink v-if="currentUser?.isAdmin === true" to="/articleManage">文章管理</RouterLink>
+        <RouterLink v-if="canAccessPage(currentUser, 'articleManage')" to="/articleManage">
+          文章管理
+        </RouterLink>
       </nav>
     </header>
     <RouterLink class="reader-back" to="/article">

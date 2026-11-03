@@ -69,7 +69,11 @@ export async function saveUserProfile(profile: UserProfile) {
     data = await updateUserProfile(body)
   } catch (error) {
     if (error instanceof RequestError) {
-      if (error.status === 401) {
+      if (error.status === 401 || error.status === 403) {
+        if (!localStorage.getItem(TOKEN_KEY)) {
+          clearSession()
+          throw new ProfileError(error.message, error.status)
+        }
         if (!sameSession()) throw new ProfileError('登录状态已变化，请重新打开个人资料页。')
         clearSession()
       }

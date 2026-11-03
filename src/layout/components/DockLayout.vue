@@ -57,7 +57,7 @@
         </DockIcon>
 
         <DockIcon
-          v-if="currentUser?.isAdmin === true"
+          v-if="canAccessPage(currentUser, 'articleManage')"
           class="flex justify-center"
           style="margin: 0 4px"
         >
@@ -74,7 +74,7 @@
         </DockIcon>
 
         <DockIcon
-          v-if="currentUser?.isAdmin === true"
+          v-if="canAccessPage(currentUser, 'roleManage')"
           class="flex justify-center"
           style="margin: 0 4px"
         >
@@ -186,6 +186,7 @@
   import { Icon } from '@iconify/vue'
   import Tippy from '@/components/Tippy.vue'
   import { useGlobalStore } from '@/store'
+  import { canAccessPage } from '@/config/access'
   import { currentUser, signOut } from '@/lib/auth'
   import { userProfile } from '@/lib/profile'
   import UserAvatar from '@/components/UserAvatar.vue'

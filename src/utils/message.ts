@@ -10,8 +10,14 @@ export interface MessageOptions {
 
 let messageInstance: ReturnType<typeof createApp> | null = null
 let container: HTMLDivElement | null = null
+let activeKey = ''
 
 export function showMessage(options: MessageOptions | string) {
+  const opts: MessageOptions = typeof options === 'string' ? { message: options } : options
+  const key = `${opts.type || 'info'}:${opts.message}`
+  if (messageInstance && activeKey === key) return
+  activeKey = key
+
   // 如果已存在消息,先移除
   if (messageInstance && container) {
     messageInstance.unmount()
@@ -19,8 +25,6 @@ export function showMessage(options: MessageOptions | string) {
     messageInstance = null
     container = null
   }
-
-  const opts: MessageOptions = typeof options === 'string' ? { message: options } : options
 
   // 创建容器
   container = document.createElement('div')

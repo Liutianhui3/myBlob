@@ -2,8 +2,9 @@
   import { onMounted, onUnmounted, ref, watch } from 'vue'
   import { useRouter, onBeforeRouteLeave } from 'vue-router'
   import { Icon } from '@iconify/vue'
-  import { currentUser, setUserInfo } from '@/lib/auth'
-  import { listRoleUsers, setUserRole, type RoleUser } from '@/api/roles'
+  import { currentUser, checkSession } from '@/lib/auth'
+  import { listRoleUsers, listRoles, setUserRole, type RoleUser, type Role } from '@/api/roles'
+  import { canAccessPage } from '@/config/access'
   import { articleDate } from '@/api/articles'
   import '@/assets/styles/articles.css'
   const router = useRouter()
@@ -17,6 +18,9 @@
   const error = ref('')
   const notice = ref('')
   const pending = ref<RoleUser>()
+  const availableRoles = ref<Role[]>([])
+  const selectedRoles = ref<number[]>([])
+  const dialogError = ref('')
   const dialog = ref<HTMLDialogElement>()
   let controller: AbortController | undefined
   async function load() {
@@ -55,34 +59,46 @@
   function confirm(user: RoleUser) {
     if (saving.value) return
     pending.value = user
+    selectedRoles.value = user.roles.map(role => role.id)
+    dialogError.value = ''
     dialog.value?.showModal()
   }
   async function update() {
     if (!pending.value || saving.value) return
+    if (!selectedRoles.value.length) {
+      dialogError.value = '每个用户至少需要一个角色'
+      return
+    }
     const user = pending.value
     saving.value = true
     error.value = ''
     notice.value = ''
     let demotedSelf = false
     try {
-      const result = await setUserRole(user.id, !user.isAdmin)
+      const result = await setUserRole(user.id, selectedRoles.value)
       dialog.value?.close()
       if (currentUser.value?.id === result.id) {
-        setUserInfo({ ...currentUser.value, isAdmin: result.isAdmin })
-        demotedSelf = !result.isAdmin
+        await checkSession({ refresh: true })
+        demotedSelf = !canAccessPage(currentUser.value, 'roleManage')
       }
-      notice.value = `${result.name || result.username}已设为${result.isAdmin ? '管理员' : '普通用户'}。`
+      notice.value = `${result.name || result.username}的角色已保存。`
       if (!demotedSelf) await load()
     } catch (e) {
-      dialog.value?.close()
-      error.value = e instanceof Error ? e.message : '角色保存失败'
+      dialogError.value = e instanceof Error ? e.message : '角色保存失败'
     } finally {
       saving.value = false
     }
     if (demotedSelf) await router.replace('/article')
   }
   watch(role, search)
-  onMounted(load)
+  onMounted(async () => {
+    try {
+      availableRoles.value = await listRoles()
+      await load()
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : '角色加载失败'
+    }
+  })
   onUnmounted(() => controller?.abort())
   onBeforeRouteLeave(() => !saving.value)
 </script>
@@ -96,26 +112,30 @@
       </RouterLink>
       <nav class="article-navigation" aria-label="管理导航">
         <RouterLink to="/article">阅读文章</RouterLink>
-        <RouterLink to="/articleManage">文章管理</RouterLink>
-        <RouterLink to="/roleManage">角色管理</RouterLink>
+        <RouterLink v-if="canAccessPage(currentUser, 'articleManage')" to="/articleManage">
+          文章管理
+        </RouterLink>
+        <RouterLink v-if="canAccessPage(currentUser, 'roleManage')" to="/roleManage">
+          角色管理
+        </RouterLink>
       </nav>
     </header>
     <section class="roles-intro">
       <p class="article-eyebrow">Access & permissions</p>
       <h1>角色管理</h1>
-      <p class="article-subtitle">指定内容管理员，让文章维护各司其职。</p>
+      <p class="article-subtitle">为用户分配一个或多个角色，管理内容维护与系统访问权限。</p>
     </section>
     <section class="roles-policy">
       <Icon icon="lucide:shield-check" />
       <div>
         <strong>管理员可以维护文章与管理用户角色</strong>
-        <p>普通用户可阅读已发布文章。系统会保留至少一位管理员，避免失去管理权限。</p>
+        <p>文章编辑可维护文章，普通用户可阅读已发布文章。系统会保留至少一位管理员。</p>
       </div>
     </section>
-    <div v-if="error" class="article-error" role="alert">
+    <!-- <div v-if="error" class="article-error" role="alert">
       {{ error }}
       <button :disabled="saving" @click="load">重新加载</button>
-    </div>
+    </div> -->
     <p v-if="notice" class="role-notice" role="status">{{ notice }}</p>
     <section class="roles-table-panel">
       <div class="roles-filters">
@@ -124,7 +144,8 @@
             v-for="tab in [
               { label: '全部用户', value: '' },
               { label: '管理员', value: 'admin' },
-              { label: '普通用户', value: 'user' }
+              { label: '普通用户', value: 'common' },
+              { label: '文章编辑', value: 'editor' }
             ]"
             :key="tab.value"
             :aria-pressed="role === tab.value"
@@ -176,20 +197,25 @@
               </td>
               <td class="role-email">{{ user.email }}</td>
               <td>
-                <span class="role-badge" :class="{ admin: user.isAdmin }">
-                  <Icon v-if="user.isAdmin" icon="lucide:shield-check" />
-                  {{ user.isAdmin ? '管理员' : '普通用户' }}
+                <span
+                  v-for="item in user.roles"
+                  :key="item.id"
+                  class="role-badge"
+                  :class="{ admin: item.id === 1 }"
+                >
+                  {{ item.nameCn }}
                 </span>
+                <span v-if="!user.roles.length" class="role-username">未分配角色</span>
               </td>
               <td>{{ articleDate(user.createdAt) }}</td>
               <td>
                 <button
                   class="role-action"
-                  :disabled="saving"
-                  :aria-label="`${user.isAdmin ? '取消' : '设置'}${user.username || user.name}的管理员权限`"
+                  :disabled="saving || !availableRoles.length"
+                  :aria-label="`分配${user.username || user.name}的角色`"
                   @click="confirm(user)"
                 >
-                  {{ user.isAdmin ? '取消管理员' : '设为管理员' }}
+                  分配角色
                 </button>
               </td>
             </tr>
@@ -217,29 +243,73 @@
         </div>
       </footer>
     </section>
-    <dialog ref="dialog" class="roles-dialog" @cancel="saving && $event.preventDefault()">
-      <h2>{{ pending?.isAdmin ? '取消管理员权限？' : '设置为管理员？' }}</h2>
-      <p>
-        {{ pending?.name || pending?.username
-        }}{{
-          pending?.isAdmin
-            ? '将只能阅读文章，无法维护文章或管理角色。'
-            : '将可以维护所有文章，并设置其他用户的管理员权限。'
-        }}
-      </p>
+    <dialog
+      ref="dialog"
+      class="roles-dialog"
+      aria-labelledby="role-dialog-title"
+      @cancel="saving && $event.preventDefault()"
+    >
+      <h2 id="role-dialog-title">分配角色</h2>
+      <p>{{ pending?.name || pending?.username }} · {{ pending?.email }}</p>
+      <fieldset class="role-options" :disabled="saving">
+        <legend>选择用户角色（可多选）</legend>
+        <label v-for="item in availableRoles" :key="item.id" class="role-option">
+          <input v-model="selectedRoles" type="checkbox" :value="item.id" />
+          <span>
+            {{ item.nameCn }}
+            <small>{{ item.name }}</small>
+          </span>
+        </label>
+      </fieldset>
       <p v-if="pending?.id === currentUser?.id" class="self-warning">
-        这是你的账号，取消后会退出管理页面。
+        修改自己的角色后，系统会重新检查管理页面访问权限。
       </p>
+      <p v-if="!selectedRoles.length" role="status">每个用户至少需要一个角色。</p>
+      <p v-if="dialogError" class="article-error" role="alert">{{ dialogError }}</p>
       <div>
         <button class="article-secondary" :disabled="saving" @click="dialog?.close()">取消</button>
-        <button class="article-primary" :disabled="saving" @click="update">
-          {{ saving ? '正在保存…' : '确认修改' }}
+        <button class="article-primary" :disabled="saving || !selectedRoles.length" @click="update">
+          {{ saving ? '正在保存…' : '保存角色' }}
         </button>
       </div>
     </dialog>
   </main>
 </template>
 <style scoped>
+  .role-options {
+    border: 0;
+    padding: 0;
+  }
+  .role-options legend {
+    margin-bottom: 12px;
+    font-size: 13px;
+  }
+  .role-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--article-border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    cursor: pointer;
+  }
+  .role-option input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--article-accent);
+  }
+  .role-option small {
+    color: var(--article-muted);
+    margin-left: 8px;
+  }
+  .role-badge {
+    margin: 2px 4px 2px 0;
+  }
+  .roles-tabs {
+    flex-wrap: wrap;
+  }
+
   .roles-breadcrumb {
     font-size: 13px;
     font-weight: 400;

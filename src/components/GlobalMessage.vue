@@ -1,47 +1,63 @@
 <template>
   <Teleport to="body">
-    <Transition
-      name="message"
-      @before-enter="onBeforeEnter"
-      @enter="onEnter"
-      @leave="onLeave"
-    >
-      <div
-        v-if="visible"
-        class="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none"
-        role="alert"
-        aria-live="polite"
-      >
+    <Transition name="message" appear @after-leave="emit('close')">
+      <div v-if="visible" class="message-position">
         <div
-          class="message-card pointer-events-auto shadow-2xl backdrop-blur-xl border"
-          :class="typeClasses"
+          class="message-card"
+          :class="`message-${type}`"
+          @mouseenter="pause('hover')"
+          @mouseleave="resume('hover')"
+          @focusin="pause('focus')"
+          @focusout="resume('focus')"
         >
-          <div class="flex items-start gap-3 min-w-[320px] max-w-[520px]">
-            <!-- Icon -->
-            <div class="flex-shrink-0 mt-0.5">
-              <div class="icon-wrapper" :class="iconWrapperClasses">
-                <Icon :icon="iconName" class="w-5 h-5" />
-              </div>
-            </div>
-
-            <!-- Content -->
-            <div class="flex-1 pt-0.5">
-              <p class="message-text">{{ message }}</p>
-            </div>
-
-            <!-- Close Button -->
-            <button
-              @click="close"
-              class="flex-shrink-0 mt-0.5 close-button"
-              aria-label="关闭"
+          <svg
+            class="message-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <path v-if="type === 'success'" d="m8 12 3 3 5-6" />
+            <path v-else-if="type === 'error'" d="m9 9 6 6m0-6-6 6" />
+            <path v-else d="M12 7v6m0 3v1" />
+          </svg>
+          <p role="status" aria-live="polite">{{ message }}</p>
+          <button type="button" aria-label="关闭提示" @click="close">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
             >
-              <Icon icon="material-symbols:close-rounded" class="w-5 h-5" />
-            </button>
-          </div>
-
-          <!-- Progress Bar -->
-          <div v-if="duration > 0" class="progress-container">
-            <div class="progress-bar" :class="progressClasses" :style="progressStyle"></div>
+              <path d="m6 6 12 12M18 6 6 18" />
+            </svg>
+          </button>
+          <div
+            v-if="duration > 0"
+            class="message-water"
+            :class="{ 'is-paused': paused }"
+            :style="{
+              transform: `translateY(calc(${(1 - remaining / duration) * 100}% + ${(1 - remaining / duration) * 20}px))`
+            }"
+            aria-hidden="true"
+          >
+            <svg class="message-wave" viewBox="0 0 800 20" preserveAspectRatio="none">
+              <path
+                d="M0 10 Q50 0 100 10 T200 10 T300 10 T400 10 T500 10 T600 10 T700 10 T800 10 V20 H0Z"
+              />
+            </svg>
+            <svg
+              class="message-wave message-wave-back"
+              viewBox="0 0 800 20"
+              preserveAspectRatio="none"
+            >
+              <path
+                d="M0 10 Q50 0 100 10 T200 10 T300 10 T400 10 T500 10 T600 10 T700 10 T800 10 V20 H0Z"
+              />
+            </svg>
           </div>
         </div>
       </div>
@@ -50,322 +66,237 @@
 </template>
 
 <script setup lang="ts">
-  import { ref, computed, watch, onUnmounted } from 'vue'
-  import { Icon } from '@iconify/vue'
-  import { gsap } from 'gsap'
+  import { ref, onMounted, onUnmounted } from 'vue'
 
   export type MessageType = 'success' | 'error' | 'warning' | 'info'
-
-  interface Props {
-    message: string
-    type?: MessageType
-    duration?: number
-  }
-
-  const props = withDefaults(defineProps<Props>(), {
-    type: 'info',
-    duration: 4000
-  })
-
-  const emit = defineEmits<{
-    close: []
-  }>()
-
+  const props = withDefaults(
+    defineProps<{ message: string; type?: MessageType; duration?: number }>(),
+    {
+      type: 'info',
+      duration: 4000
+    }
+  )
+  const emit = defineEmits<{ close: [] }>()
   const visible = ref(true)
-  const progressStyle = ref({ width: '100%' })
-  let closeTimer: ReturnType<typeof setTimeout> | null = null
-  let progressTimer: ReturnType<typeof setTimeout> | null = null
+  const remaining = ref(Math.max(0, props.duration))
+  const pauses = new Set<string>()
+  const paused = ref(false)
+  let frame: number | undefined
+  let closeTimer: ReturnType<typeof setTimeout> | undefined
+  let deadline = 0
 
-  const typeClasses = computed(() => {
-    const classes = {
-      success: 'message-success',
-      error: 'message-error',
-      warning: 'message-warning',
-      info: 'message-info'
-    }
-    return classes[props.type]
-  })
-
-  const iconWrapperClasses = computed(() => {
-    const classes = {
-      success: 'icon-success',
-      error: 'icon-error',
-      warning: 'icon-warning',
-      info: 'icon-info'
-    }
-    return classes[props.type]
-  })
-
-  const progressClasses = computed(() => {
-    const classes = {
-      success: 'progress-success',
-      error: 'progress-error',
-      warning: 'progress-warning',
-      info: 'progress-info'
-    }
-    return classes[props.type]
-  })
-
-  const iconName = computed(() => {
-    const icons = {
-      success: 'material-symbols:check-circle-rounded',
-      error: 'material-symbols:cancel-rounded',
-      warning: 'material-symbols:warning-rounded',
-      info: 'material-symbols:info-rounded'
-    }
-    return icons[props.type]
-  })
-
-  const close = () => {
+  function close() {
+    if (frame !== undefined) cancelAnimationFrame(frame)
+    clearTimeout(closeTimer)
     visible.value = false
-    if (closeTimer) clearTimeout(closeTimer)
-    if (progressTimer) clearTimeout(progressTimer)
   }
 
-  const startAutoClose = () => {
-    if (props.duration > 0) {
-      // 进度条动画
-      progressTimer = setTimeout(() => {
-        progressStyle.value = { width: '0%' }
-      }, 50)
-
-      // 自动关闭
-      closeTimer = setTimeout(() => {
-        close()
-      }, props.duration)
+  function tick(now: number) {
+    remaining.value = Math.max(0, deadline - now)
+    if (remaining.value > 0) frame = requestAnimationFrame(tick)
+    else {
+      frame = undefined
+      // Let the last water surface leave the container before fading out.
+      closeTimer = setTimeout(close, 80)
     }
   }
 
-  // GSAP 动画
-  const onBeforeEnter = (el: Element) => {
-    gsap.set(el, {
-      opacity: 0,
-      y: -30,
-      scale: 0.9
-    })
+  function resume(reason?: string) {
+    if (reason) pauses.delete(reason)
+    paused.value = pauses.size > 0
+    if (props.duration <= 0 || pauses.size || frame !== undefined || remaining.value <= 0) return
+    deadline = performance.now() + remaining.value
+    frame = requestAnimationFrame(tick)
   }
 
-  const onEnter = (el: Element, done: () => void) => {
-    gsap.to(el, {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      duration: 0.4,
-      ease: 'back.out(1.7)',
-      onComplete: done
-    })
+  function pause(reason: string) {
+    pauses.add(reason)
+    paused.value = true
+    if (frame === undefined) return
+    cancelAnimationFrame(frame)
+    frame = undefined
+    remaining.value = Math.max(0, deadline - performance.now())
   }
 
-  const onLeave = (el: Element, done: () => void) => {
-    gsap.to(el, {
-      opacity: 0,
-      y: -20,
-      scale: 0.95,
-      duration: 0.3,
-      ease: 'power2.in',
-      onComplete: () => {
-        done()
-        emit('close')
-      }
-    })
-  }
-
-  // 组件挂载后开始自动关闭倒计时
-  startAutoClose()
-
+  onMounted(() => resume())
   onUnmounted(() => {
-    if (closeTimer) clearTimeout(closeTimer)
-    if (progressTimer) clearTimeout(progressTimer)
+    if (frame !== undefined) cancelAnimationFrame(frame)
+    clearTimeout(closeTimer)
   })
 </script>
 
 <style scoped>
-  .message-card {
-    position: relative;
-    padding: 1rem 1.25rem;
-    overflow: hidden;
-    border-radius: 0.75rem;
-    transition: all 0.3s;
-  }
-
-  /* Success 样式 */
-  .message-success {
-    background: rgba(16, 185, 129, 0.1);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-  }
-
-  .dark .message-success {
-    background: rgba(5, 46, 22, 0.9);
-    border-color: rgba(6, 78, 59, 0.5);
-  }
-
-  .icon-success {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 0.5rem;
-    background: rgba(16, 185, 129, 0.15);
-    color: rgb(16, 185, 129);
-  }
-
-  .dark .icon-success {
-    background: rgba(6, 78, 59, 0.6);
-    color: rgb(52, 211, 153);
-  }
-
-  .progress-success {
-    background: linear-gradient(to right, rgb(52, 211, 153), rgb(16, 185, 129));
-  }
-
-  /* Error 样式 */
-  .message-error {
-    background: rgba(244, 63, 94, 0.1);
-    border: 1px solid rgba(244, 63, 94, 0.3);
-  }
-
-  .dark .message-error {
-    background: rgba(76, 5, 25, 0.9);
-    border-color: rgba(136, 19, 55, 0.5);
-  }
-
-  .icon-error {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 0.5rem;
-    background: rgba(244, 63, 94, 0.15);
-    color: rgb(244, 63, 94);
-  }
-
-  .dark .icon-error {
-    background: rgba(136, 19, 55, 0.6);
-    color: rgb(251, 113, 133);
-  }
-
-  .progress-error {
-    background: linear-gradient(to right, rgb(251, 113, 133), rgb(244, 63, 94));
-  }
-
-  /* Warning 样式 */
-  .message-warning {
-    background: rgba(245, 158, 11, 0.1);
-    border: 1px solid rgba(245, 158, 11, 0.3);
-  }
-
-  .dark .message-warning {
-    background: rgba(69, 26, 3, 0.9);
-    border-color: rgba(146, 64, 14, 0.5);
-  }
-
-  .icon-warning {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 0.5rem;
-    background: rgba(245, 158, 11, 0.15);
-    color: rgb(245, 158, 11);
-  }
-
-  .dark .icon-warning {
-    background: rgba(146, 64, 14, 0.6);
-    color: rgb(251, 191, 36);
-  }
-
-  .progress-warning {
-    background: linear-gradient(to right, rgb(251, 191, 36), rgb(245, 158, 11));
-  }
-
-  /* Info 样式 */
-  .message-info {
-    background: rgba(59, 130, 246, 0.1);
-    border: 1px solid rgba(59, 130, 246, 0.3);
-  }
-
-  .dark .message-info {
-    background: rgba(23, 37, 84, 0.9);
-    border-color: rgba(30, 58, 138, 0.5);
-  }
-
-  .icon-info {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 0.5rem;
-    background: rgba(59, 130, 246, 0.15);
-    color: rgb(59, 130, 246);
-  }
-
-  .dark .icon-info {
-    background: rgba(30, 58, 138, 0.6);
-    color: rgb(96, 165, 250);
-  }
-
-  .progress-info {
-    background: linear-gradient(to right, rgb(96, 165, 250), rgb(59, 130, 246));
-  }
-
-  /* 文本样式 */
-  .message-text {
-    font-size: 0.875rem;
-    font-weight: 500;
-    line-height: 1.625;
-    color: rgb(31, 41, 55);
-  }
-
-  .dark .message-text {
-    color: rgb(243, 244, 246);
-  }
-
-  /* 关闭按钮 */
-  .close-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.5rem;
-    height: 1.5rem;
-    border-radius: 0.375rem;
-    color: rgb(107, 114, 128);
-    transition: all 0.2s;
-  }
-
-  .close-button:hover {
-    color: rgb(55, 65, 81);
-    background: rgba(0, 0, 0, 0.05);
-  }
-
-  .dark .close-button {
-    color: rgb(156, 163, 175);
-  }
-
-  .dark .close-button:hover {
-    color: rgb(229, 231, 235);
-    background: rgba(255, 255, 255, 0.05);
-  }
-
-  /* 进度条容器 */
-  .progress-container {
-    position: absolute;
-    bottom: 0;
+  .message-position {
+    position: fixed;
+    top: max(24px, env(safe-area-inset-top));
     left: 0;
     right: 0;
-    height: 0.25rem;
-    overflow: hidden;
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    padding: 0 16px;
+    pointer-events: none;
   }
-
-  /* 进度条 */
-  .progress-bar {
-    height: 100%;
-    transition-property: width;
-    transition-timing-function: linear;
-    transition-duration: v-bind('`${props.duration}ms`');
+  .message-card {
+    --message-accent: #1d4ed8;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: max-content;
+    max-width: 520px;
+    min-width: 0;
+    padding: 10px 8px 12px 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    background: #fff;
+    color: #1e293b;
+    box-shadow:
+      0 12px 40px -12px rgb(15 23 42 / 20%),
+      0 2px 8px rgb(15 23 42 / 4%);
+    pointer-events: auto;
+  }
+  .message-success {
+    --message-accent: #047857;
+  }
+  .message-error {
+    --message-accent: #be123c;
+  }
+  .message-warning {
+    --message-accent: #92400e;
+  }
+  .message-icon {
+    box-sizing: content-box;
+    width: 22px;
+    height: 22px;
+    padding: 9px;
+    border-radius: 12px;
+    flex-shrink: 0;
+    color: var(--message-accent);
+    background: color-mix(in srgb, var(--message-accent) 9%, transparent);
+  }
+  .message-card > :not(.message-water) {
+    position: relative;
+    z-index: 1;
+  }
+  .message-water {
+    position: absolute;
+    inset: 0 0 -12px;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--message-accent) 10%, transparent);
+    color: color-mix(in srgb, var(--message-accent) 10%, transparent);
+  }
+  .message-wave {
+    position: absolute;
+    top: -12px;
+    left: 0;
+    width: 200%;
+    height: 16px;
+    fill: currentColor;
+    animation: water-wave 3s linear infinite;
+  }
+  .message-wave-back {
+    top: -15px;
+    opacity: 0.45;
+    animation-duration: 4.5s;
+    animation-direction: reverse;
+  }
+  .is-paused .message-wave {
+    animation-play-state: paused;
+  }
+  @keyframes water-wave {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  p {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.6;
+  }
+  button {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    transition: background 150ms;
+  }
+  button svg {
+    width: 18px;
+    height: 18px;
+  }
+  button:hover {
+    background: rgb(148 163 184 / 15%);
+  }
+  button:focus-visible {
+    outline: 2px solid var(--message-accent);
+    outline-offset: -2px;
+  }
+  .dark .message-card {
+    background: #1e293b;
+    color: #f8fafc;
+    border-color: #475569;
+    --message-accent: #93c5fd;
+  }
+  .dark .message-success {
+    --message-accent: #6ee7b7;
+  }
+  .dark .message-error {
+    --message-accent: #fda4af;
+  }
+  .dark .message-warning {
+    --message-accent: #fcd34d;
+  }
+  .message-enter-active {
+    transition:
+      opacity 220ms ease-out,
+      transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .message-leave-active {
+    transition:
+      opacity 180ms ease-in,
+      transform 180ms ease-in;
+  }
+  .message-enter-from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.97);
+  }
+  .message-leave-to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  @media (max-width: 400px) {
+    .message-card {
+      gap: 8px;
+      padding-left: 12px;
+    }
+    .message-icon {
+      width: 20px;
+      height: 20px;
+      padding: 7px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .message-wave {
+      animation: none;
+    }
+    .message-enter-active,
+    .message-leave-active,
+    button {
+      transition: none;
+    }
   }
 </style>
-
