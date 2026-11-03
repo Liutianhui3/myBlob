@@ -3,7 +3,7 @@ import { logout } from '../api/auth'
 import { getCurrentUser } from '../api/user'
 import type { CurrentUser, WorkExperience } from '../api/types'
 import { RequestError } from '../utils/request'
-import { TOKEN_KEY, getToken } from '../utils/token'
+import { TOKEN_KEY, getToken, setToken, removeToken } from '../utils/token'
 
 export type { CurrentUser, WorkExperience } from '../api/types'
 export { TOKEN_KEY } from '../utils/token'
@@ -93,12 +93,12 @@ export function setUserInfo(user: CurrentUser | null) {
 }
 
 export function saveSession(token: string, user: CurrentUser) {
-  localStorage.setItem(TOKEN_KEY, token)
+  setToken(token)
   setUserInfo(user)
 }
 
 export function clearSession() {
-  localStorage.removeItem(TOKEN_KEY)
+  removeToken()
   setUserInfo(null)
 }
 

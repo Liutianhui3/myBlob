@@ -26,6 +26,7 @@ declare module 'vue' {
     Dock: typeof import('./src/components/Dock/Dock.vue')['default']
     DockIcon: typeof import('./src/components/Dock/DockIcon.vue')['default']
     DockSeparator: typeof import('./src/components/Dock/DockSeparator.vue')['default']
+    GlobalMessage: typeof import('./src/components/GlobalMessage.vue')['default']
     LocationSelect: typeof import('./src/components/LocationSelect.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
