@@ -6,6 +6,8 @@
   import { gsap } from 'gsap'
   import { ScrollToPlugin } from 'gsap/ScrollToPlugin'
   import icons from '@/assets/chat-icons.json'
+  import ChatReasoning from '@/components/ChatReasoning.vue'
+  import ChatFileAttachment from '@/components/ChatFileAttachment.vue'
   import ChatMarkdown from '@/components/ChatMarkdown.vue'
   import ChatImageAttachment from '@/components/ChatImageAttachment.vue'
   import ChatImageGenerating from '@/components/ChatImageGenerating.vue'
@@ -73,6 +75,7 @@
   }
   const messages = ref<ChatMessage[]>([])
   const imageGeneratingId = ref('')
+  const fileGeneratingId = ref('')
   const draft = ref('')
   const attachments = ref<ChatAttachment[]>([])
   const attachmentInput = ref<HTMLInputElement>()
@@ -598,9 +601,23 @@
             if (payload.model) reply!.model = payload.model
             if (payload.reasoningEffort) reply!.reasoningEffort = payload.reasoningEffort
           },
+          onReasoning(text) {
+            reply!.reasoningContent = (reply!.reasoningContent || '') + text
+            void scrollBottom()
+          },
           onDelta(text) {
             imageGeneratingId.value = ''
+            fileGeneratingId.value = ''
             reply!.content += text
+            void scrollBottom()
+          },
+          onFileGeneration() {
+            fileGeneratingId.value = reply!.id
+            void scrollBottom()
+          },
+          onFile(file) {
+            fileGeneratingId.value = ''
+            reply!.files = [...(reply!.files || []), file]
             void scrollBottom()
           },
           onImageGeneration() {
@@ -608,6 +625,7 @@
             void nextTick(() => scrollBottom())
           },
           onDone(payload) {
+            fileGeneratingId.value = ''
             imageGeneratingId.value = ''
             reply!.status = 'completed'
             if (payload.finishReason === 'length')
@@ -649,6 +667,7 @@
       }
     } finally {
       imageGeneratingId.value = ''
+      fileGeneratingId.value = ''
       if (generation === controller) {
         generation = undefined
         busy.value = false
@@ -1026,9 +1045,36 @@
                   正在生成
                 </span>
               </div>
+              <ChatReasoning
+                v-if="
+                  message.reasoningContent ||
+                  (message.status === 'generating' &&
+                    busy &&
+                    !message.content &&
+                    !message.files?.length &&
+                    imageGeneratingId !== message.id &&
+                    fileGeneratingId !== message.id)
+                "
+                :content="message.reasoningContent || ''"
+                :status="message.status"
+                :analyzing="
+                  message.status === 'generating' &&
+                  busy &&
+                  !message.content &&
+                  imageGeneratingId !== message.id &&
+                  fileGeneratingId !== message.id
+                "
+              />
               <ChatMarkdown
                 v-if="message.content"
                 :content="message.content"
+                :conversation-id="activeId"
+                :message-id="message.id"
+              />
+              <ChatFileAttachment
+                v-for="file in message.files || []"
+                :key="file.id"
+                :file="file"
                 :conversation-id="activeId"
                 :message-id="message.id"
               />
@@ -1036,12 +1082,23 @@
                 v-if="imageGeneratingId === message.id && message.status === 'generating' && busy"
               />
               <p
-                v-else-if="!message.content && message.status === 'generating'"
+                v-else-if="
+                  !message.content &&
+                  !message.files?.length &&
+                  message.status === 'generating' &&
+                  (!busy || fileGeneratingId === message.id)
+                "
                 class="thinking"
                 role="status"
               >
                 <span class="loading-dot" />
-                {{ busy ? '正在思考…' : '回复正在生成，稍后重新加载可查看状态。' }}
+                {{
+                  busy
+                    ? fileGeneratingId === message.id
+                      ? '正在生成文件…'
+                      : '正在思考…'
+                    : '回复正在生成，稍后重新加载可查看状态。'
+                }}
               </p>
               <button
                 v-if="message.status === 'generating' && !busy"

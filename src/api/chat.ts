@@ -16,7 +16,25 @@ export interface ChatAttachment {
   data?: string
   text?: string
 }
+export interface ChatFile {
+  id: string
+  name: string
+  mimeType: string
+  size: number
+  downloadUrl: string
+}
+export const downloadChatFile = (conversationId: string, messageId: string, fileId: string) =>
+  withChatErrors(() =>
+    request<Blob>({
+      url: `/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/files/${encodeURIComponent(fileId)}/download`,
+      responseType: 'blob',
+      timeout: 65000
+    })
+  )
+
 export interface ChatMessage {
+  reasoningContent?: string
+  files?: ChatFile[]
   attachments?: ChatAttachment[]
   id: string
   turnId: string
@@ -125,7 +143,10 @@ export interface StreamCallbacks {
     reasoningEffort?: string
   }) => void
   onDelta: (text: string) => void
+  onReasoning?: (text: string) => void
   onImageGeneration?: () => void
+  onFileGeneration?: () => void
+  onFile?: (file: ChatFile) => void
   onDone: (payload: { messageId: string; finishReason?: string }) => void
 }
 
@@ -182,6 +203,12 @@ export async function streamMessage(
             if (event === 'start') callbacks.onStart(payload)
             if (event === 'image_generation' && payload.status === 'generating')
               callbacks.onImageGeneration?.()
+            if (event === 'file_generation') callbacks.onFileGeneration?.()
+            if (event === 'file') callbacks.onFile?.(payload)
+            if (event === 'reasoning') {
+              if (typeof payload.text !== 'string') throw new ChatError('分析数据异常。')
+              callbacks.onReasoning?.(payload.text)
+            }
             if (event === 'delta') {
               if (typeof payload.text !== 'string') throw new ChatError('回复数据异常。')
               callbacks.onDelta(payload.text)

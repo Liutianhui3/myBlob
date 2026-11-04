@@ -136,3 +136,57 @@ test('history keeps bigint pagination cursor as an encoded string', async () => 
   await api.getMessages('c', '9223372036854775807')
   assert.equal(calls[0][0], '/api/conversations/c/messages?limit=50&before=9223372036854775807')
 })
+
+test('generated Office files arrive as structured events without JSON in the reply text', async () => {
+  const file = {
+    id: 'file-1',
+    name: '报告.docx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    size: 1024,
+    downloadUrl: '/download'
+  }
+  const wire = `event: file_generation\ndata: {"status":"generating"}\n\nevent: file\ndata: ${JSON.stringify(file)}\n\nevent: done\ndata: {"messageId":"reply"}\n\n`
+  const { api } = client(sseResponse(wire))
+  const events = []
+  await api.streamMessage(
+    'conversation',
+    '生成 Word',
+    callbacks({
+      onFileGeneration() {
+        events.push('generating')
+      },
+      onFile(value) {
+        events.push(value)
+      },
+      onDelta() {
+        assert.fail('file parameters must not appear in text')
+      },
+      onDone() {
+        events.push('done')
+      }
+    })
+  )
+  assert.deepEqual(JSON.parse(JSON.stringify(events)), ['generating', file, 'done'])
+})
+
+test('reasoning chunks stay separate from final answer text', async () => {
+  const wire =
+    'event: reasoning\ndata: {"text":"先分析"}\n\nevent: reasoning\ndata: {"text":"再整理"}\n\nevent: delta\ndata: {"text":"最终回答"}\n\nevent: done\ndata: {"messageId":"reply"}\n\n'
+  const { api } = client(sseResponse(wire))
+  let reasoning = ''
+  let answer = ''
+  await api.streamMessage(
+    'conversation',
+    '问题',
+    callbacks({
+      onReasoning(text) {
+        reasoning += text
+      },
+      onDelta(text) {
+        answer += text
+      }
+    })
+  )
+  assert.equal(reasoning, '先分析再整理')
+  assert.equal(answer, '最终回答')
+})
